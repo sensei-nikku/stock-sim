@@ -767,6 +767,35 @@ function clearQuarterTimer() {
   if (quarterTimer) { clearInterval(quarterTimer); quarterTimer = null; }
 }
 
+function startSOYTimer(seconds) {
+  clearQuarterTimer();
+  quarterTimeLeft = seconds;
+  updateSOYTimerDisplay();
+  quarterTimer = setInterval(() => {
+    quarterTimeLeft--;
+    updateSOYTimerDisplay();
+    if (quarterTimeLeft <= 0) {
+      clearQuarterTimer();
+      startQuarters();
+    }
+  }, 1000);
+}
+
+function updateSOYTimerDisplay() {
+  const el = document.getElementById('soyTimerDisplay');
+  if (!el) return;
+  const mins = Math.floor(quarterTimeLeft / 60);
+  const secs = quarterTimeLeft % 60;
+  el.textContent = `${mins}:${secs.toString().padStart(2,'0')}`;
+  if (quarterTimeLeft <= 5) {
+    el.parentElement.className = 'timer-bar warning';
+  } else if (quarterTimeLeft <= 15) {
+    el.parentElement.className = 'timer-bar';
+  } else {
+    el.parentElement.className = 'timer-bar safe';
+  }
+}
+
 function updateTimerDisplay() {
   const el = document.getElementById('quarterTimerDisplay');
   if (!el) return;
@@ -801,10 +830,12 @@ function renderPlaying() {
     case 'paycheck': content = renderPaycheck(); break;
     case 'news': content = renderNews(); break;
     case 'decision': content = renderDecision(); break;
+    case 'rationale': content = renderRationale(); break;
     case 'soy': content = renderSOY(); break;
     case 'quarters': content = renderQuarters(); break;
     case 'events': content = renderEvents(); break;
     case 'record': content = renderRecord(); break;
+    case 'reflect': content = renderReflect(); break;
   }
   
   app.innerHTML = `
@@ -821,13 +852,17 @@ function renderPlaying() {
       </div>
       <div class="phase-indicator">${dots}</div>
       ${getChoiceTrackerHTML()}
-      <div class="step-title">${yp === 'record' ? 'End of Year' : yp === 'soy' ? 'Start of Year — Buy' : yp.charAt(0).toUpperCase() + yp.slice(1)}</div>
+      <div class="step-title">${yp === 'record' ? 'End of Year' : yp === 'reflect' ? 'Reflect' : yp === 'rationale' ? 'Write Your Rationale' : yp === 'soy' ? 'Start of Year — Buy' : yp.charAt(0).toUpperCase() + yp.slice(1)}</div>
       ${content}
     </div>
   `;
   
+  // Start timer for SOY buy phase
+  if (yp === 'soy') {
+    if (!quarterTimer) startSOYTimer(45);
+  }
   // Start timer for trading quarters
-  if (yp === 'quarters' && state.choice === 'trade') {
+  else if (yp === 'quarters' && state.choice === 'trade') {
     // Only start if not already running for this quarter
     if (!quarterTimer) startQuarterTimer(45);
   } else {
@@ -950,12 +985,32 @@ function executeDecision() {
   }
   
   state.currentQuarter = 0;
-  if (state.choice === 'trade') {
-    state.yearPhase = 'soy';
-  } else {
-    state.yearPhase = 'events';
-  }
+  state.yearPhase = 'rationale';
   render();
+}
+
+function renderRationale() {
+  const choiceLabel = state.choice === 'save' ? '💵 SAVE' : state.choice === 'invest' ? '📈 INVEST' : '⚡ TRADE';
+  const choiceColor = state.choice === 'save' ? 'var(--green)' : state.choice === 'invest' ? 'var(--purple)' : 'var(--gold)';
+  const nextPhase = state.choice === 'trade' ? 'soy' : 'events';
+  const nextLabel = state.choice === 'trade' ? 'Go to Start-of-Year Buy →' : 'See What Happened →';
+  
+  return `
+    <div class="card" style="text-align:center; border:2px solid ${choiceColor}; padding:40px 24px;">
+      <div style="font-size:3rem; margin-bottom:12px;">${state.choice === 'save' ? '💵' : state.choice === 'invest' ? '📈' : '⚡'}</div>
+      <h2 style="color:${choiceColor}; margin-bottom:16px;">You chose to ${choiceLabel}</h2>
+      <div style="background:var(--card2); border-radius:10px; padding:20px; text-align:left; max-width:500px; margin:0 auto 20px;">
+        <h3 style="margin-bottom:8px;">✍️ Write Your Rationale</h3>
+        <p style="font-size:0.95rem; color:var(--dim); margin-bottom:10px;">On your tracker, write <strong>why</strong> you made this decision. Use the news and rumors you just read to justify your reasoning.</p>
+        <p style="font-size:0.9rem; color:var(--dim);">Think about:</p>
+        <p style="font-size:0.9rem; margin:4px 0;">→ Which news headlines influenced you?</p>
+        <p style="font-size:0.9rem; margin:4px 0;">→ Did any rumors affect your thinking?</p>
+        <p style="font-size:0.9rem; margin:4px 0;">→ What are you hoping will happen this year?</p>
+      </div>
+      <p class="dim" style="font-size:0.85rem; margin-bottom:16px;">Don't continue until you've written your rationale on the tracker.</p>
+      <button class="btn btn-primary" style="font-size:1.05rem; padding:12px 32px;" onclick="state.yearPhase='${nextPhase}';render();">${nextLabel}</button>
+    </div>
+  `;
 }
 
 function renderSOY() {
@@ -979,6 +1034,10 @@ function renderSOY() {
   }).join('');
   
   return `
+    <div class="timer-bar safe" style="display:flex; justify-content:space-between; align-items:center;">
+      <span>⏱ <span id="soyTimerDisplay">0:45</span></span>
+      <button class="btn btn-sm btn-outline" onclick="startQuarters()" style="color:var(--text); border-color:rgba(255,255,255,0.3);">Done buying — Open Q1 →</button>
+    </div>
     <div class="card card-accent">
       <h2>🛒 Start-of-Year Buy</h2>
       <p class="dim" style="margin-bottom:4px;">These are last year's closing prices. Buy before the market opens.</p>
@@ -994,7 +1053,6 @@ function renderSOY() {
       </table>
       <p class="dim" style="font-size:0.8rem; margin-top:8px;">Fee: $1 per $100 spent. Buy in $100 multiples. No fee on sells.</p>
     </div>
-    <button class="btn btn-primary" onclick="startQuarters()">Start Trading — Q1 Opens →</button>
   `;
 }
 
@@ -1069,7 +1127,7 @@ function renderQuarters() {
       <button class="btn btn-sm btn-outline" onclick="nextQuarter()" style="color:var(--text); border-color:rgba(255,255,255,0.3);">Done trading this quarter →</button>
     </div>
     <div class="card">
-      <div class="quarter-label">Quarter ${q + 1} of 4</div>
+      <div class="quarter-label">Quarter ${q + 1} of 3</div>
       <table class="price-table">
         <tr><th>Stock</th><th>Price</th><th>Change</th></tr>
         ${rows}
@@ -1109,7 +1167,7 @@ function sellStock(ticker, price) {
 
 function nextQuarter() {
   clearQuarterTimer();
-  if (state.currentQuarter < 3) {
+  if (state.currentQuarter < 2) {
     state.currentQuarter++;
   } else {
     state.yearPhase = 'events';
@@ -1275,7 +1333,31 @@ function renderRecord() {
     })()}
     
     <div style="text-align:center;">
-      <button class="btn btn-primary" style="font-size:1.1rem; padding:14px 40px;" onclick="advanceYear()">
+      <button class="btn btn-primary" style="font-size:1.1rem; padding:14px 40px;" onclick="state.yearPhase='reflect';render();">
+        Record & Reflect →
+      </button>
+    </div>
+  `;
+}
+
+function renderReflect() {
+  const yr = state.currentYear;
+  const choiceEmoji = state.choice === 'save' ? '💵' : state.choice === 'invest' ? '📈' : '⚡';
+  const choiceWord = state.choice === 'save' ? 'saved' : state.choice === 'invest' ? 'invested' : 'traded';
+  
+  return `
+    <div class="card" style="text-align:center; border:2px solid var(--cyan); padding:40px 24px;">
+      <div style="font-size:3rem; margin-bottom:12px;">🪞</div>
+      <h2 style="color:var(--cyan); margin-bottom:16px;">Reflect on Year ${yr + 1}</h2>
+      <div style="background:var(--card2); border-radius:10px; padding:20px; text-align:left; max-width:500px; margin:0 auto 20px;">
+        <h3 style="margin-bottom:8px;">📝 On Your Tracker</h3>
+        <p style="font-size:0.95rem; color:var(--dim); margin-bottom:12px;">You ${choiceWord} this year ${choiceEmoji}. Now look at what actually happened and write a short reflection.</p>
+        <p style="font-size:0.9rem; margin:6px 0;">→ Did the news match reality, or were you surprised?</p>
+        <p style="font-size:0.9rem; margin:6px 0;">→ Would you make the same choice again? Why or why not?</p>
+        <p style="font-size:0.9rem; margin:6px 0;">→ What will you watch for next year?</p>
+      </div>
+      <p class="dim" style="font-size:0.85rem; margin-bottom:16px;">Don't continue until you've written your reflection on the tracker.</p>
+      <button class="btn btn-primary" style="font-size:1.05rem; padding:12px 32px;" onclick="advanceYear()">
         ${yr < 14 ? `Continue to Year ${yr + 2} →` : '🏁 See Final Results'}
       </button>
     </div>
