@@ -624,8 +624,30 @@ function newState() {
   };
 }
 
-function saveState() { try { localStorage.setItem('sim_v3', JSON.stringify(state)); } catch(e){} }
-function loadState() { try { const s = localStorage.getItem('sim_v3'); return s ? JSON.parse(s) : null; } catch(e) { return null; } }
+function saveState() {
+  try { localStorage.setItem('sim_v3', JSON.stringify(state)); } catch(e){}
+  try { window.history.replaceState(null, '', '#' + btoa(JSON.stringify(state))); } catch(e){}
+}
+function loadState() {
+  try {
+    const hash = window.location.hash.slice(1);
+    if (hash) { const s = JSON.parse(atob(hash)); if (s && s.phase) return s; }
+  } catch(e){}
+  try { const s = localStorage.getItem('sim_v3'); return s ? JSON.parse(s) : null; } catch(e) { return null; }
+}
+function copySaveLink() {
+  const url = window.location.href.split('#')[0] + '#' + btoa(JSON.stringify(state));
+  navigator.clipboard.writeText(url).then(() => showToast('Save link copied!')).catch(() => {
+    prompt('Copy this link to save your game:', url);
+  });
+}
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
 
 function $(sel) { return document.querySelector(sel); }
 function fmt(n) { return '$' + Math.round(n).toLocaleString(); }
@@ -844,6 +866,7 @@ function renderPlaying() {
       <div class="header-bar">
         <div>
           <span class="dim" style="font-size:0.85rem;">${state.playerName}</span>
+          <button class="btn btn-sm btn-outline" style="margin-left:8px; padding:3px 10px; font-size:0.7rem;" onclick="copySaveLink()">💾 Save Link</button>
         </div>
         <div class="year-badge">Year ${yr + 1}</div>
         <div>
@@ -1500,6 +1523,7 @@ function renderGameOver() {
 
 function resetGame() {
   localStorage.removeItem('sim_v3');
+  window.history.replaceState(null, '', window.location.pathname);
   state = newState();
   render();
 }
