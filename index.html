@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock Market Simulator</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0a0f1a;
+  --card: #111827;
+  --card2: #1a2236;
+  --border: #1e2d4a;
+  --text: #e2e8f0;
+  --dim: #8896b3;
+  --green: #22c55e;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --gold: #f59e0b;
+  --purple: #a78bfa;
+  --cyan: #06b6d4;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+.container { max-width: 900px; margin: 0 auto; padding: 16px; }
+
+h1 { font-family: 'DM Serif Display', serif; font-size: 2rem; }
+h2 { font-family: 'DM Serif Display', serif; font-size: 1.4rem; margin-bottom: 12px; }
+h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.card-accent {
+  border-left: 3px solid var(--blue);
+}
+
+.btn {
+  display: inline-block;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-primary:hover { background: #2563eb; }
+.btn-save { background: var(--green); color: #000; }
+.btn-invest { background: var(--purple); color: #000; }
+.btn-trade { background: var(--gold); color: #000; }
+.btn-sm { padding: 6px 14px; font-size: 0.85rem; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--blue); }
+
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+.tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.tag-green { background: rgba(34,197,94,0.15); color: var(--green); }
+.tag-red { background: rgba(239,68,68,0.15); color: var(--red); }
+.tag-blue { background: rgba(59,130,246,0.15); color: var(--blue); }
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+.price-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.price-table th { text-align: left; padding: 8px; color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--border); }
+.price-table td { padding: 8px; border-bottom: 1px solid rgba(30,45,74,0.5); }
+
+.up { color: var(--green); }
+.down { color: var(--red); }
+.dim { color: var(--dim); }
+.gold { color: var(--gold); }
+
+.news-item {
+  padding: 10px 14px;
+  background: var(--card2);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.rumor-item {
+  padding: 10px 14px;
+  background: rgba(245,158,11,0.08);
+  border-left: 2px solid var(--gold);
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.phase-indicator {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.phase-dot {
+  width: 32px; height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+.phase-dot.active { background: var(--blue); }
+.phase-dot.done { background: var(--green); }
+
+.portfolio-bar {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--card2);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.portfolio-item {
+  text-align: center;
+  min-width: 80px;
+}
+
+.portfolio-item .label { font-size: 0.7rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.portfolio-item .value { font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 600; }
+
+.trade-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.trade-input input {
+  width: 100px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.trade-input input:focus { outline: none; border-color: var(--blue); }
+
+.reason-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.reason-input:focus { outline: none; border-color: var(--blue); }
+
+.header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.year-badge {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.1rem;
+  padding: 6px 16px;
+  background: var(--blue);
+  border-radius: 99px;
+  color: #fff;
+}
+
+.step-title {
+  font-size: 0.85rem;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+
+.fade-in { animation: fadeIn 0.4s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.choice-tracker {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--card2);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 0.8rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.choice-tracker .ct-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ct-item .ct-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+
+.ct-item.done .ct-count { color: var(--green); }
+.ct-item.warn .ct-count { color: var(--gold); }
+.ct-item.urgent .ct-count { color: var(--red); }
+
+.timer-bar {
+  text-align: center;
+  padding: 10px;
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--red);
+}
+
+.timer-bar.safe { 
+  background: rgba(34,197,94,0.1);
+  border-color: rgba(34,197,94,0.3);
+  color: var(--green);
+}
+
+.timer-bar.warning {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.choice-card {
+  padding: 20px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.choice-card:hover { border-color: var(--blue); background: var(--card2); }
+.choice-card.selected { border-color: var(--blue); background: rgba(59,130,246,0.1); }
+
+.choice-card h3 { margin-bottom: 4px; }
+.choice-card p { font-size: 0.8rem; color: var(--dim); }
+
+.quarter-reveal {
+  text-align: center;
+  padding: 30px;
+}
+
+.quarter-label {
+  font-size: 0.8rem;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+
+.holdings-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 8px; }
+.holdings-table th { text-align: left; padding: 6px 8px; color: var(--dim); font-weight: 500; }
+.holdings-table td { padding: 6px 8px; }
+
+.summary-stat {
+  text-align: center;
+  padding: 16px;
+}
+
+.summary-stat .big { font-family: 'JetBrains Mono', monospace; font-size: 1.8rem; font-weight: 700; }
+.summary-stat .label { font-size: 0.8rem; color: var(--dim); }
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 24px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  z-index: 100;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp { from { opacity: 0; transform: translate(-50%, 10px); } }
+
+.intro-hero {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.intro-hero h1 { font-size: 2.5rem; margin-bottom: 8px; }
+.intro-hero p { color: var(--dim); font-size: 1.1rem; margin-bottom: 30px; }
+
+input[type="text"] {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+  width: 100%;
+  max-width: 300px;
+}
+
+input[type="text"]:focus { outline: none; border-color: var(--blue); }
+
+.flex-center { display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+@media (max-width: 600px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .grid-3 { grid-template-columns: 1fr; }
+  h1 { font-size: 1.6rem; }
+  .intro-hero h1 { font-size: 1.8rem; }
+}
+</style>
+</head>
+<body>
+<div class="container" id="app"></div>
+
+<script>
+// ============================================================
+// STOCK MARKET SIMULATOR V3 — GAME DATA
+// ============================================================
+
+const STOCKS = [
+  { ticker: 'MED', name: 'MediCorp', industry: 'Healthcare', color: '#22c55e' },
+  { ticker: 'TBK', name: 'TrustBank', industry: 'Finance', color: '#3b82f6' },
+  { ticker: 'NVT', name: 'NovaTech', industry: 'Technology', color: '#a78bfa' },
+  { ticker: 'PPK', name: 'PetroPeak', industry: 'Energy', color: '#f59e0b' },
+  { ticker: 'SHP', name: 'ShopSmart', industry: 'Retail', color: '#06b6d4' },
+];
+
+const FUND_WEIGHTS = { MED: 0.40, TBK: 0.40, NVT: 0.20 };
+const STARTING_PRICES = { MED: 120, TBK: 80, NVT: 100, PPK: 70, SHP: 40 };
+const SAVINGS_RATE = 0.03;
+
+// V3 quarterly prices [Q1, Q2, Q3, Q4] for each stock + fund
+const PRICES = [
+  // Year 1
+  { MED:[118,126,123,130], TBK:[83,88,85,90], NVT:[105,112,108,110], PPK:[68,82,70,75], SHP:[41,43,41,42], FUND:[101,108,105,110] },
+  // Year 2
+  { MED:[140,155,148,160], TBK:[98,112,108,120], NVT:[125,148,135,155], PPK:[88,115,95,120], SHP:[46,54,50,52], FUND:[120,136,129,143] },
+  // Year 3
+  { MED:[170,185,178,190], TBK:[130,142,138,145], NVT:[170,195,180,190], PPK:[140,175,155,165], SHP:[55,60,56,58], FUND:[154,170,162,172] },
+  // Year 4
+  { MED:[200,215,210,220], TBK:[155,170,165,175], NVT:[210,245,225,240], PPK:[185,230,195,210], SHP:[60,65,62,62], FUND:[184,203,195,206] },
+  // Year 5
+  { MED:[200,190,185,180], TBK:[155,135,120,110], NVT:[195,140,110,95], PPK:[170,120,95,85], SHP:[55,45,38,35], FUND:[181,158,144,135] },
+  // Year 6
+  { MED:[188,198,192,195], TBK:[118,128,122,125], NVT:[108,125,115,120], PPK:[105,145,115,130], SHP:[37,40,36,38], FUND:[144,155,149,152] },
+  // Year 7
+  { MED:[175,162,155,150], TBK:[110,100,95,90], NVT:[100,90,85,80], PPK:[100,75,55,45], SHP:[34,30,29,28], FUND:[134,123,117,112] },
+  // Year 8
+  { MED:[160,172,168,180], TBK:[98,108,112,120], NVT:[90,105,95,110], PPK:[60,85,70,95], SHP:[30,33,31,34], FUND:[121,133,131,142] },
+  // Year 9
+  { MED:[192,205,198,210], TBK:[130,140,138,145], NVT:[125,145,135,150], PPK:[110,155,125,140], SHP:[36,42,38,40], FUND:[154,167,161,172] },
+  // Year 10
+  { MED:[220,230,228,235], TBK:[152,160,158,165], NVT:[162,175,170,185], PPK:[150,130,120,110], SHP:[43,46,44,45], FUND:[181,191,188,197] },
+  // Year 11
+  { MED:[240,248,242,245], TBK:[168,172,168,170], NVT:[190,200,192,195], PPK:[125,165,135,150], SHP:[44,47,43,43], FUND:[201,208,202,205] },
+  // Year 12
+  { MED:[242,238,240,240], TBK:[168,164,166,165], NVT:[192,188,195,190], PPK:[130,105,90,80], SHP:[42,40,41,40], FUND:[202,198,201,200] },
+  // Year 13
+  { MED:[245,252,248,248], TBK:[167,172,168,168], NVT:[195,205,195,195], PPK:[100,145,120,160], SHP:[42,46,43,42], FUND:[204,211,205,205] },
+  // Year 14
+  { MED:[258,272,268,275], TBK:[178,190,185,195], NVT:[210,230,222,220], PPK:[190,270,230,250], SHP:[45,50,47,48], FUND:[216,231,226,232] },
+  // Year 15
+  { MED:[272,268,270,265], TBK:[192,188,190,185], NVT:[218,215,220,215], PPK:[220,180,150,130], SHP:[46,44,45,44], FUND:[229,225,228,223] },
+];
+
+const YEAR_TITLES = [
+  "The Calm Start","Hard Rally","Growing Confidence","Peak / Bubble","Bubble Burst",
+  "Dead Cat Bounce","True Bottom","Recovery Begins","Recovery","Steady Growth",
+  "Chop","Chop","Supply Squeeze","Second Rally","Correction"
+];
+
+const NEWS = [
+  // Year 1
+  ["The economy added 175,000 jobs last month, meeting expectations.",
+   "MediCorp's new outpatient clinic network is seeing steady enrollment growth.",
+   "The Federal Reserve signals no changes to interest rates this quarter.",
+   "Oil prices remain stable as global supply and demand stay balanced.",
+   "NovaTech reports solid quarterly earnings from enterprise software contracts."],
+  // Year 2
+  ["Consumer confidence hits a 5-year high as wages and employment climb.",
+   "A major new oil field discovery is announced overseas, sparking energy sector excitement.",
+   "ANALYSTS PREDICT NovaTech could DOUBLE in value within two years!",
+   "ENERGY BOOM! Experts say oil demand will surge for the next decade!",
+   "TrustBank reports record mortgage lending as housing demand climbs."],
+  // Year 3
+  ["GDP growth comes in at 3.2%, above the 2.8% forecast.",
+   "MediCorp receives FDA approval for a new treatment — revenue expected to grow steadily.",
+   "PetroPeak reports record quarterly profits as energy demand stays strong.",
+   "TRUSTBANK EXPANSION — analysts say banking stocks could be the next big thing!",
+   "Environmental regulators announce they're reviewing energy sector emissions standards."],
+  // Year 4
+  ["MARKETS UNSTOPPABLE — analysts predict another 20% gain next year!",
+   "PetroPeak SOARS — energy analysts say this is just the beginning!",
+   "NovaTech launches AI-powered platform to strong initial adoption.",
+   "Interest rates remain low, supporting continued bank lending.",
+   "A few hedge funds have quietly started reducing their stock positions."],
+  // Year 5
+  ["Markets experience a \"healthy correction\" after a strong run.",
+   "PANIC! EXPERTS WARN OF TOTAL ECONOMIC COLLAPSE!",
+   "Energy sector adjusts to new global pricing realities.",
+   "Major retailers report declining sales as consumers pull back on spending.",
+   "BANKS FACE CRISIS — loan defaults surge as economy stumbles!"],
+  // Year 6
+  ["Markets show signs of stabilization after last year's sharp decline.",
+   "MediCorp continues steady operations — healthcare demand is recession-resistant.",
+   "Energy prices tick up slightly on supply disruptions overseas.",
+   "Consumer confidence surveys show slight improvement in outlook.",
+   "RECOVERY UNDERWAY! Analysts say the worst is definitely behind us!"],
+  // Year 7
+  ["MARKET MELTDOWN CONTINUES — IS THIS THE END OF INVESTING?",
+   "Energy companies report continued challenges in a tough market.",
+   "UNEMPLOYMENT HITS RECORD LEVELS — no end in sight!",
+   "Banks quietly set aside larger loan loss reserves.",
+   "MediCorp maintains stable revenue despite the broader downturn."],
+  // Year 8
+  ["Economic indicators show the first signs of genuine recovery.",
+   "Banks report improving loan performance as fewer borrowers default.",
+   "NovaTech pivots to cloud services and sees immediate customer interest.",
+   "PetroPeak SURGES — energy stocks lead the recovery!",
+   "Consumer spending ticks up modestly for the first time in two years."],
+  // Year 9
+  ["GDP growth returns to healthy levels at 2.8% annualized.",
+   "MediCorp completes acquisition of biotech firm, expanding product pipeline.",
+   "Energy prices stabilize at sustainable levels as global demand normalizes.",
+   "NovaTech's cloud platform gains major enterprise clients.",
+   "FULL RECOVERY! Markets are back and better than ever!"],
+  // Year 10
+  ["Markets officially recover to pre-crash levels on an annualized basis.",
+   "MediCorp reports record annual revenue driven by aging population trends.",
+   "TrustBank expands digital banking services, attracting younger customers.",
+   "NovaTech secures a major government technology contract.",
+   "Global oil demand growth slows as renewable energy adoption accelerates."],
+  // Year 11
+  ["Economic growth continues but at a slower pace — 1.8% GDP growth.",
+   "Healthcare spending steady. No major regulatory changes expected.",
+   "ENERGY COMEBACK! PetroPeak positioned for a major breakout!",
+   "Banks report stable but unexciting earnings amid flat interest rates.",
+   "Trade tensions between major economies are building quietly."],
+  // Year 12
+  ["Markets trade sideways as investors wait for direction.",
+   "New environmental regulations increase costs for energy producers.",
+   "MediCorp benefits from expanded Medicare coverage for seniors.",
+   "ENERGY IN CRISIS — new regulations could DESTROY oil companies!",
+   "Several major retailers quietly report softening holiday sales."],
+  // Year 13
+  ["Economy shows mixed signals — some sectors grow, others stagnate.",
+   "NovaTech reports strong earnings from cybersecurity and cloud divisions.",
+   "PetroPeak TURNAROUND — lean operations make them the comeback story of the year!",
+   "TrustBank launches small business lending initiative, wins community trust.",
+   "Global supply chain disruptions are starting to affect multiple industries."],
+  // Year 14
+  ["Supply chain disruptions drive prices up, boosting revenues for producers.",
+   "PPK IS THE NEW GOLD — energy stocks are the MUST-OWN asset of the decade!",
+   "NovaTech's AI platform wins major contracts as businesses automate.",
+   "MARKETS SOAR — analysts raise targets across the board!",
+   "A few pension funds and institutional investors begin quietly taking profits."],
+  // Year 15
+  ["Markets pull back from recent highs as earnings growth slows.",
+   "ENERGY COLLAPSE — PetroPeak investors face DEVASTATING losses!",
+   "MediCorp continues steady growth, outperforming in a down market.",
+   "New trade agreements could open markets for technology exports.",
+   "IS THIS THE NEXT CRASH? Analysts warn of a repeat of the recession!"],
+];
+
+const RUMORS = [
+  // Year 1
+  ["I heard TrustBank is about to launch a new high-yield savings product that's getting a lot of attention.",
+   "Word is MediCorp just signed a contract with a major hospital chain.",
+   "Someone told me PetroPeak is being investigated for environmental violations."],
+  // Year 2
+  ["I heard PetroPeak just signed a massive supply deal with a foreign government.",
+   "Word on the street is ShopSmart is about to be acquired by a major retailer at a huge premium.",
+   "My cousin works at NovaTech and says they're about to release a product that will change everything."],
+  // Year 3
+  ["I heard MediCorp is in talks to acquire a smaller biotech company.",
+   "People are saying NovaTech's CEO is about to step down.",
+   "A friend in oil says PetroPeak's supply deal is even bigger than reported — they're sitting on a goldmine."],
+  // Year 4
+  ["I heard PetroPeak is about to discover a new domestic oil reserve that would triple their output.",
+   "Someone told me the government is going to announce massive infrastructure spending that'll boost every sector.",
+   "Word is NovaTech is about to be bought by a tech giant for twice its current price."],
+  // Year 5
+  ["I heard the government is about to announce a massive bailout package that will save the markets.",
+   "Someone in energy told me PetroPeak just signed an emergency deal that will stabilize their stock.",
+   "A friend at TrustBank says they're about to lay off half their staff."],
+  // Year 6
+  ["I heard PetroPeak is restructuring and cutting costs aggressively — could be lean and profitable soon.",
+   "Someone told me NovaTech is going bankrupt — they can't survive the downturn.",
+   "Word is the housing market is about to come roaring back, which would be huge for banks."],
+  // Year 7
+  ["I heard PetroPeak is about to get bought out at $30 a share by a foreign energy company.",
+   "Someone told me the government is going to ban short selling, which will send markets soaring.",
+   "A friend at ShopSmart says they're going to close half their stores."],
+  // Year 8
+  ["I heard TrustBank is about to report their best quarter in three years.",
+   "Word is PetroPeak's restructuring failed and they're back to losing money.",
+   "Someone at MediCorp says they're about to announce a breakthrough drug that will send the stock through the roof."],
+  // Year 9
+  ["I heard ShopSmart is launching an online platform that could seriously boost their revenue.",
+   "Word is the Federal Reserve is going to cut interest rates, which would be great for banks and borrowing.",
+   "Someone told me PetroPeak is about to face massive new environmental fines."],
+  // Year 10
+  ["I heard NovaTech's government contract is even bigger than announced — multi-year deal.",
+   "Word is MediCorp is going to raise their dividend this year.",
+   "Someone in energy says PetroPeak is pivoting to renewables and it's going to make them huge."],
+  // Year 11
+  ["I heard NovaTech is expanding into cybersecurity — huge growth market.",
+   "Someone told me TrustBank is going to merge with another major bank, doubling their size.",
+   "Word is PetroPeak found another major oil deposit — stock should spike."],
+  // Year 12
+  ["I heard PetroPeak is going to cut their dividend to save cash.",
+   "Someone told me the government is about to reverse the new energy regulations.",
+   "A friend says ShopSmart's online platform is failing and they might shut it down."],
+  // Year 13
+  ["I heard PetroPeak signed a new supply contract that locks in high prices for two years.",
+   "Someone says MediCorp's next drug trial failed and the stock is going to tank.",
+   "Word is interest rates are about to spike, which would crush bank stocks."],
+  // Year 14
+  ["I heard PetroPeak's supply squeeze is even tighter than reported — prices could go higher.",
+   "Someone told me NovaTech's AI platform has a major security flaw that will be made public soon.",
+   "Word is the Federal Reserve is going to cut rates aggressively, which will supercharge the rally."],
+  // Year 15
+  ["I heard PetroPeak's supply contract is expiring and won't be renewed on the same terms.",
+   "Someone told me the government is about to impose a tax on stock trading that will kill the market.",
+   "Word is TrustBank is in financial trouble and might need a bailout."],
+];
+
+const EVENTS = [
+  ["TrustBank DID launch a new savings product. Moderate customer interest.","MediCorp DID sign a hospital chain contract. Small but steady revenue boost.","PetroPeak is NOT under investigation. Business as usual.","A calm, stable year. All news was accurate. No surprises."],
+  ["PetroPeak DID sign a foreign supply deal. Big revenue boost.","ShopSmart is NOT being acquired. No deal in the works.","NovaTech released a new product. It's good but not game-changing.","Energy and tech led a strong rally. Some news overstated the impact."],
+  ["MediCorp IS in acquisition talks. Deal expected next year.","NovaTech's CEO is NOT stepping down. Rumor was baseless.","PetroPeak's supply deal is profitable but not as big as the rumor suggested.","Environmental review is real and could matter down the road."],
+  ["NO new oil reserve for PetroPeak. Pure hype.","Infrastructure plan announced but much smaller than rumored.","No NovaTech acquisition. Rumor was completely false.","Smart money WAS reducing positions. The warning signs were there."],
+  ["NO bailout package. Markets are on their own.","NO emergency deal for PetroPeak. Stock continues falling.","TrustBank IS cutting staff, but 10%, not 50%.","News was unreliable — some overstated panic, some understated danger."],
+  ["PetroPeak IS restructuring. Cost cuts are real.","NovaTech is NOT going bankrupt. They have cash reserves.","Housing shows modest improvement, not a roaring comeback.","The \"recovery\" talk was premature. Year 7 will prove it."],
+  ["NO PetroPeak buyout. Stock continues falling.","NO short-selling ban. Markets continue to struggle.","ShopSmart IS closing some stores, but 15%, not half.","This is the worst year. Every rumor was wrong."],
+  ["TrustBank DID have its best quarter in three years. Recovery is real.","PetroPeak's restructuring DID work. They're profitable again.","MediCorp's new drug is solid but not a game-changer.","Recovery is genuine but uneven. Information is getting more reliable."],
+  ["ShopSmart IS launching online sales. Gradual but positive.","The Fed DID cut rates. Lending and borrowing improve.","NO environmental fines for PetroPeak. Business continues.","Recovery is solid. Most news was accurate this year."],
+  ["NovaTech's contract IS multi-year. Strong growth ahead.","MediCorp DID raise their dividend. Steady performer.","PetroPeak's \"renewable pivot\" is a tiny pilot. Energy is stalling.","PPK fell this year even as the broad market recovered. Sector matters."],
+  ["NovaTech IS entering cybersecurity. Modest early revenue.","NO TrustBank merger. Rumor was false.","PetroPeak's oil find was small. Stock is volatile as usual.","Markets are choppy. Growth has stalled."],
+  ["PetroPeak DID cut their dividend. Investors fled.","Regulations are NOT being reversed. Energy faces structural headwinds.","ShopSmart's online platform is struggling but still operating.","PPK crashed while the broader market was flat. Individual stock risk is real."],
+  ["PetroPeak DID sign a high-price supply contract. Revenue stabilizes.","MediCorp's trial had mixed results but pipeline is healthy.","Interest rates did NOT spike. Banks are fine.","PPK doubled this year. Was it skill or luck? Can you do it again?"],
+  ["PetroPeak's supply squeeze IS real. Prices spiked.","NO security flaw at NovaTech. Product is solid.","Fed cut rates once, not aggressively. Moderate impact.","Smart money was taking profits. Sound familiar?"],
+  ["PetroPeak's contract IS expiring. Revenue will drop.","NO stock trading tax. Rumor was completely false.","TrustBank is FINE. Earnings dipped but they're healthy.","This was a correction, not a crash. The news made it sound scarier than it was."],
+];
+
+// ============================================================
+// GAME ENGINE
+// ============================================================
+
+const app = document.getElementById('app');
+let state = loadState() || newState();
+// Migrate old saves
+if (!state.txLog) state.txLog = [];
+if (!state.saveCt && state.saveCt !== 0) state.saveCt = 0;
+if (!state.investCt && state.investCt !== 0) state.investCt = 0;
+if (!state.tradeCt && state.tradeCt !== 0) state.tradeCt = 0;
+
+function newState() {
+  return {
+    phase: 'intro', // intro, name, playing, gameover
+    playerName: '',
+    currentYear: 0, // 0-14
+    yearPhase: 'paycheck', // paycheck, news, decision, quarters, events, record
+    currentQuarter: 0,
+    cash: 0,
+    savings: 0,
+    fundShares: 0,
+    stocks: { MED:0, TBK:0, NVT:0, PPK:0, SHP:0 },
+    choice: null, // 'save','invest','trade'
+    totalFees: 0,
+    history: [], // { year, choice, reason, portfolioValue }
+    tradeCash: 0,
+    saveCt: 0,
+    investCt: 0,
+    tradeCt: 0,
+    txLog: [], // {year, quarter, action, ticker, amount, price, shares, fee}
+  };
+}
+
+function saveState() { try { localStorage.setItem('sim_v3', JSON.stringify(state)); } catch(e){} }
+function loadState() { try { const s = localStorage.getItem('sim_v3'); return s ? JSON.parse(s) : null; } catch(e) { return null; } }
+
+function $(sel) { return document.querySelector(sel); }
+function fmt(n) { return '$' + Math.round(n).toLocaleString(); }
+
+function getQ4Price(year, ticker) { return PRICES[year][ticker][3]; }
+function getCurrentPrices(year, quarter) {
+  const p = {};
+  STOCKS.forEach(s => p[s.ticker] = PRICES[year][s.ticker][quarter]);
+  p.FUND = PRICES[year].FUND[quarter];
+  return p;
+}
+
+function getPortfolioValue() {
+  let val = state.cash + state.savings;
+  if (state.currentYear > 0 || state.yearPhase !== 'paycheck') {
+    const yr = Math.min(state.currentYear, 14);
+    const q = Math.min(state.currentQuarter, 3);
+    const qIdx = state.yearPhase === 'paycheck' || state.yearPhase === 'news' || state.yearPhase === 'decision' 
+      ? (state.currentYear > 0 ? 3 : 0) : q;
+    const priceYear = state.yearPhase === 'paycheck' || state.yearPhase === 'news' || state.yearPhase === 'decision'
+      ? (state.currentYear > 0 ? state.currentYear - 1 : 0) : yr;
+    
+    if (state.fundShares > 0) {
+      const fp = priceYear < 15 ? PRICES[priceYear].FUND[qIdx] : PRICES[14].FUND[3];
+      val += state.fundShares * fp;
+    }
+    STOCKS.forEach(s => {
+      if (state.stocks[s.ticker] > 0) {
+        const sp = priceYear < 15 ? PRICES[priceYear][s.ticker][qIdx] : PRICES[14][s.ticker][3];
+        val += state.stocks[s.ticker] * sp;
+      }
+    });
+  }
+  val += state.tradeCash || 0;
+  return val;
+}
+
+function getLatestFundPrice() {
+  if (state.currentYear === 0 && (state.yearPhase === 'paycheck' || state.yearPhase === 'news' || state.yearPhase === 'decision')) return 100;
+  if (state.yearPhase === 'quarters' || state.yearPhase === 'events' || state.yearPhase === 'record') {
+    return PRICES[state.currentYear].FUND[state.currentQuarter];
+  }
+  return state.currentYear > 0 ? PRICES[state.currentYear - 1].FUND[3] : 100;
+}
+
+function calculateFee(amount) { return Math.floor(amount / 100); }
+
+function render() {
+  switch(state.phase) {
+    case 'intro': renderIntro(); break;
+    case 'name': renderName(); break;
+    case 'playing': renderPlaying(); break;
+    case 'gameover': renderGameOver(); break;
+  }
+  saveState();
+}
+
+function renderIntro() {
+  app.innerHTML = `
+    <div class="intro-hero fade-in">
+      <h1>Stock Market Simulator</h1>
+      <p>15 years. $1,000 per year. Save, invest, or trade.</p>
+      <div class="card" style="text-align:left; max-width:600px; margin:0 auto 24px;">
+        <h3>How It Works</h3>
+        <p style="margin:8px 0; font-size:0.9rem;">Each year you get $1,000. You must choose one path:</p>
+        <p style="margin:4px 0; font-size:0.9rem;"><strong style="color:var(--green)">SAVE</strong> — Deposit into a savings account earning 3%/year</p>
+        <p style="margin:4px 0; font-size:0.9rem;"><strong style="color:var(--purple)">INVEST</strong> — Buy the index fund (40% MED, 40% TBK, 20% NVT)</p>
+        <p style="margin:4px 0; font-size:0.9rem;"><strong style="color:var(--gold)">TRADE</strong> — Buy individual stocks. Fee: $1 per $100 spent. Buys in $100 multiples.</p>
+      </div>
+      <button class="btn btn-primary" onclick="state.phase='name';render();">Start Playing</button>
+    </div>
+  `;
+}
+
+function renderName() {
+  app.innerHTML = `
+    <div class="intro-hero fade-in">
+      <h2>What's your name?</h2>
+      <div class="flex-center" style="margin-top:16px;">
+        <input type="text" id="nameInput" placeholder="Your name" autofocus>
+        <button class="btn btn-primary" onclick="startGame()">Begin</button>
+      </div>
+    </div>
+  `;
+  setTimeout(() => { const i = document.getElementById('nameInput'); if(i) { i.focus(); i.addEventListener('keydown', e => { if(e.key==='Enter') startGame(); }); } }, 100);
+}
+
+function startGame() {
+  const n = document.getElementById('nameInput');
+  state.playerName = n ? n.value.trim() || 'Investor' : 'Investor';
+  state.phase = 'playing';
+  state.yearPhase = 'paycheck';
+  render();
+}
+
+function getChoiceTrackerHTML() {
+  const yr = state.currentYear; // 0-indexed, so year 1 = 0
+  const yearsLeft = 14 - yr; // years remaining after this one
+  const s = state.saveCt || 0, i = state.investCt || 0, t = state.tradeCt || 0;
+  
+  function getClass(count) {
+    if (count >= 3) return 'done';
+    // How many more needed vs years remaining
+    const needed = 3 - count;
+    if (needed > yearsLeft) return 'urgent';
+    if (needed >= yearsLeft - 1) return 'warn';
+    return '';
+  }
+  
+  return `
+    <div class="choice-tracker">
+      <div class="ct-item ${getClass(s)}">💵 Save: <span class="ct-count">${s}/3</span></div>
+      <div class="ct-item ${getClass(i)}">📈 Invest: <span class="ct-count">${i}/3</span></div>
+      <div class="ct-item ${getClass(t)}">⚡ Trade: <span class="ct-count">${t}/3</span></div>
+    </div>
+  `;
+}
+
+// Timer system for trading quarters
+let quarterTimer = null;
+let quarterTimeLeft = 0;
+
+function startQuarterTimer(seconds) {
+  clearQuarterTimer();
+  quarterTimeLeft = seconds;
+  updateTimerDisplay();
+  quarterTimer = setInterval(() => {
+    quarterTimeLeft--;
+    updateTimerDisplay();
+    if (quarterTimeLeft <= 0) {
+      clearQuarterTimer();
+      // Auto-advance to next quarter
+      nextQuarter();
+    }
+  }, 1000);
+}
+
+function clearQuarterTimer() {
+  if (quarterTimer) { clearInterval(quarterTimer); quarterTimer = null; }
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById('quarterTimerDisplay');
+  if (!el) return;
+  const mins = Math.floor(quarterTimeLeft / 60);
+  const secs = quarterTimeLeft % 60;
+  el.textContent = `${mins}:${secs.toString().padStart(2,'0')}`;
+  if (quarterTimeLeft <= 5) {
+    el.parentElement.className = 'timer-bar warning';
+  } else if (quarterTimeLeft <= 15) {
+    el.parentElement.className = 'timer-bar';
+  } else {
+    el.parentElement.className = 'timer-bar safe';
+  }
+}
+
+function renderPlaying() {
+  const yr = state.currentYear;
+  const yp = state.yearPhase;
+  
+  // Phase progress dots
+  const phases = ['paycheck','news','decision','quarters','events','record'];
+  const phaseIdx = phases.indexOf(yp);
+  const dots = Array.from({length:15}, (_,i) => 
+    i < yr ? 'done' : i === yr ? 'active' : ''
+  ).map((c,i) => `<div class="phase-dot ${c}" title="Year ${i+1}"></div>`).join('');
+
+  let portfolioVal = getPortfolioValue();
+  
+  let content = '';
+  
+  switch(yp) {
+    case 'paycheck': content = renderPaycheck(); break;
+    case 'news': content = renderNews(); break;
+    case 'decision': content = renderDecision(); break;
+    case 'soy': content = renderSOY(); break;
+    case 'quarters': content = renderQuarters(); break;
+    case 'events': content = renderEvents(); break;
+    case 'record': content = renderRecord(); break;
+  }
+  
+  app.innerHTML = `
+    <div class="fade-in">
+      <div class="header-bar">
+        <div>
+          <span class="dim" style="font-size:0.85rem;">${state.playerName}</span>
+        </div>
+        <div class="year-badge">Year ${yr + 1}</div>
+        <div>
+          <span class="dim" style="font-size:0.8rem;">Portfolio</span><br>
+          <span class="mono" style="font-weight:600;">${fmt(portfolioVal)}</span>
+        </div>
+      </div>
+      <div class="phase-indicator">${dots}</div>
+      ${getChoiceTrackerHTML()}
+      <div class="step-title">${yp === 'record' ? 'End of Year' : yp === 'soy' ? 'Start of Year — Buy' : yp.charAt(0).toUpperCase() + yp.slice(1)}</div>
+      ${content}
+    </div>
+  `;
+  
+  // Start timer for trading quarters
+  if (yp === 'quarters' && state.choice === 'trade') {
+    // Only start if not already running for this quarter
+    if (!quarterTimer) startQuarterTimer(45);
+  } else {
+    clearQuarterTimer();
+  }
+}
+
+function renderPaycheck() {
+  state.cash += 1000;
+  // Auto-advance since paycheck is just info
+  return `
+    <div class="card card-accent">
+      <h2>💰 Paycheck</h2>
+      <p>You receive <strong class="mono">$1,000</strong> in cash.</p>
+      <p class="dim" style="margin-top:8px;">Cash on hand: <strong class="mono">${fmt(state.cash)}</strong></p>
+      ${state.savings > 0 ? `<p class="dim" style="margin-top:4px;">You may convert savings to cash to use this year.</p>
+        <button class="btn btn-sm btn-outline" style="margin-top:8px;" onclick="convertSavings()">Convert ${fmt(state.savings)} Savings to Cash</button>` : ''}
+    </div>
+    <button class="btn btn-primary" onclick="state.yearPhase='news';state.cash=state.cash;render();">Read the News →</button>
+  `;
+}
+
+function convertSavings() {
+  state.cash += state.savings;
+  state.savings = 0;
+  render();
+}
+
+function renderNews() {
+  const yr = state.currentYear;
+  const newsHTML = NEWS[yr].map((n,i) => `<div class="news-item">${i+1}. ${n}</div>`).join('');
+  const rumorHTML = RUMORS[yr].map((r,i) => `<div class="rumor-item">💬 ${r}</div>`).join('');
+  
+  return `
+    <div class="card">
+      <h2>📰 News</h2>
+      ${newsHTML}
+    </div>
+    <div class="card">
+      <h2>🗣️ Rumors</h2>
+      ${rumorHTML}
+    </div>
+    <button class="btn btn-primary" onclick="state.yearPhase='decision';render();">Make Your Decision →</button>
+  `;
+}
+
+function renderDecision() {
+  const fundPrice = getLatestFundPrice();
+  const shares = Math.floor((state.cash / fundPrice) * 100) / 100;
+  
+  // Build 3/3/3 nudge
+  const yr = state.currentYear;
+  const yearsLeft = 15 - yr; // including this year
+  const s = state.saveCt || 0, inv = state.investCt || 0, t = state.tradeCt || 0;
+  let nudges = [];
+  if (s < 3 && (3 - s) >= yearsLeft) nudges.push('You <strong>must save</strong> this year to hit 3 saves.');
+  else if (s < 3 && (3 - s) >= yearsLeft - 1) nudges.push('You need <strong>' + (3-s) + ' more save(s)</strong> with only ' + yearsLeft + ' years left.');
+  if (inv < 3 && (3 - inv) >= yearsLeft) nudges.push('You <strong>must invest</strong> this year to hit 3 investments.');
+  else if (inv < 3 && (3 - inv) >= yearsLeft - 1) nudges.push('You need <strong>' + (3-inv) + ' more invest(s)</strong> with only ' + yearsLeft + ' years left.');
+  if (t < 3 && (3 - t) >= yearsLeft) nudges.push('You <strong>must trade</strong> this year to hit 3 trades.');
+  else if (t < 3 && (3 - t) >= yearsLeft - 1) nudges.push('You need <strong>' + (3-t) + ' more trade(s)</strong> with only ' + yearsLeft + ' years left.');
+  
+  const nudgeHTML = nudges.length > 0 ? `
+    <div class="card" style="border-left:3px solid var(--gold); background:rgba(245,158,11,0.05);">
+      <h3 style="color:var(--gold); margin-bottom:6px;">⚠️ Requirement Check</h3>
+      <p class="dim" style="font-size:0.85rem;">You must use each strategy at least 3 times over 15 years.</p>
+      ${nudges.map(n => `<p style="font-size:0.9rem; margin:4px 0;">${n}</p>`).join('')}
+    </div>
+  ` : '';
+  
+  return `
+    <div class="card">
+      <h2>Choose Your Path</h2>
+      <p class="dim" style="margin-bottom:16px;">Cash available: <strong class="mono">${fmt(state.cash)}</strong></p>
+      <div class="grid-3">
+        <div class="choice-card ${state.choice==='save'?'selected':''}" onclick="state.choice='save';render();">
+          <h3 style="color:var(--green)">💵 Save</h3>
+          <p>Add to savings. Earn 3%/year.</p>
+        </div>
+        <div class="choice-card ${state.choice==='invest'?'selected':''}" onclick="state.choice='invest';render();">
+          <h3 style="color:var(--purple)">📈 Invest</h3>
+          <p>Buy fund at ${fmt(fundPrice)}. Get ~${shares.toFixed(2)} shares.</p>
+        </div>
+        <div class="choice-card ${state.choice==='trade'?'selected':''}" onclick="state.choice='trade';render();">
+          <h3 style="color:var(--gold)">⚡ Trade</h3>
+          <p>Buy individual stocks. $1/$100 fee on buys.</p>
+        </div>
+      </div>
+    </div>
+    ${nudgeHTML}
+    ${state.choice ? `
+    <button class="btn btn-primary" onclick="executeDecision()">Confirm & See Prices →</button>
+    ` : ''}
+  `;
+}
+
+function executeDecision() {
+  const yr = state.currentYear;
+  
+  // Increment choice counters
+  if (state.choice === 'save') {
+    state.saveCt = (state.saveCt || 0) + 1;
+    state.savings += state.cash;
+    state.savings *= (1 + SAVINGS_RATE);
+    state.cash = 0;
+  } else if (state.choice === 'invest') {
+    state.investCt = (state.investCt || 0) + 1;
+    const fundPrice = getLatestFundPrice();
+    const maxMultiples = Math.floor(state.cash / 100);
+    const spendable = maxMultiples * 100;
+    if (spendable > 0) {
+      const shares = Math.round((spendable / fundPrice) * 100) / 100;
+      state.fundShares += shares;
+      state.cash -= spendable;
+    }
+  } else if (state.choice === 'trade') {
+    state.tradeCt = (state.tradeCt || 0) + 1;
+    state.tradeCash = state.cash;
+    state.cash = 0;
+  }
+  
+  state.currentQuarter = 0;
+  if (state.choice === 'trade') {
+    state.yearPhase = 'soy';
+  } else {
+    state.yearPhase = 'events';
+  }
+  render();
+}
+
+function renderSOY() {
+  const yr = state.currentYear;
+  const prices = yr > 0 ? getCurrentPrices(yr - 1, 3) : STARTING_PRICES;
+  const fundPrice = yr > 0 ? PRICES[yr - 1].FUND[3] : 100;
+  const tc = state.tradeCash || 0;
+  
+  const rows = STOCKS.map(s => {
+    const price = prices[s.ticker];
+    const held = state.stocks[s.ticker] || 0;
+    const holdVal = held * price;
+    return `<tr>
+      <td><strong>${s.ticker}</strong> <span class="dim">${s.name}</span></td>
+      <td class="mono">${fmt(price)}</td>
+      <td>
+        <button class="btn btn-sm btn-outline" onclick="buyStockSOY('${s.ticker}',${price})" ${tc < 100 ? 'disabled' : ''}>Buy $100</button>
+      </td>
+      <td class="dim mono" style="font-size:0.8rem;">${held > 0 ? held.toFixed(2) + ' sh = ' + fmt(holdVal) : ''}</td>
+    </tr>`;
+  }).join('');
+  
+  return `
+    <div class="card card-accent">
+      <h2>🛒 Start-of-Year Buy</h2>
+      <p class="dim" style="margin-bottom:4px;">These are last year's closing prices. Buy before the market opens.</p>
+      <p style="margin-bottom:12px;">Trade Cash: <strong class="mono">${fmt(tc)}</strong></p>
+      <table class="price-table">
+        <tr><th>Stock</th><th>Price</th><th></th><th>Holdings</th></tr>
+        ${rows}
+        <tr style="border-top:2px solid var(--border);">
+          <td><strong>FUND</strong></td>
+          <td class="mono">${fmt(fundPrice)}</td>
+          <td colspan="2" class="dim" style="font-size:0.8rem;">Fund only available to investors</td>
+        </tr>
+      </table>
+      <p class="dim" style="font-size:0.8rem; margin-top:8px;">Fee: $1 per $100 spent. Buy in $100 multiples. No fee on sells.</p>
+    </div>
+    <button class="btn btn-primary" onclick="startQuarters()">Start Trading — Q1 Opens →</button>
+  `;
+}
+
+function buyStockSOY(ticker, price) {
+  const cost = 100;
+  const fee = calculateFee(cost);
+  const total = cost + fee;
+  if ((state.tradeCash || 0) < total) return;
+  state.tradeCash -= total;
+  state.totalFees += fee;
+  const shares = cost / price;
+  state.stocks[ticker] = (state.stocks[ticker] || 0) + shares;
+  state.txLog.push({ year: state.currentYear+1, quarter: 'SOY', action: 'BUY', ticker, amount: cost, price, shares, fee });
+  render();
+}
+
+function startQuarters() {
+  state.currentQuarter = 0;
+  state.yearPhase = 'quarters';
+  render();
+}
+
+function renderQuarters() {
+  const yr = state.currentYear;
+  const q = state.currentQuarter;
+  const prices = getCurrentPrices(yr, q);
+  const prevPrices = q > 0 ? getCurrentPrices(yr, q-1) : 
+    (yr > 0 ? getCurrentPrices(yr-1, 3) : STARTING_PRICES);
+  
+  const rows = STOCKS.map(s => {
+    const cur = prices[s.ticker];
+    const prev = prevPrices[s.ticker] || cur;
+    const diff = cur - prev;
+    const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '';
+    const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '—';
+    return `<tr>
+      <td><strong>${s.ticker}</strong> <span class="dim">${s.name}</span></td>
+      <td class="mono">${fmt(cur)}</td>
+      <td class="mono ${cls}">${arrow} ${diff > 0 ? '+' : ''}${fmt(diff).replace('$','')}</td>
+    </tr>`;
+  }).join('');
+  
+  const fundDiff = prices.FUND - (q > 0 ? getCurrentPrices(yr, q-1).FUND : (yr > 0 ? getCurrentPrices(yr-1,3).FUND : 100));
+  const fundCls = fundDiff > 0 ? 'up' : fundDiff < 0 ? 'down' : '';
+  
+  let tradeSection = '';
+  if (state.choice === 'trade') {
+    const tc = state.tradeCash || 0;
+    tradeSection = `
+      <div class="card" style="border-left:3px solid var(--gold);">
+        <h3>Trade — Cash: <span class="mono">${fmt(tc)}</span></h3>
+        <p class="dim" style="font-size:0.85rem; margin-bottom:12px;">Buy in $100 multiples. Fee: $1 per $100. Sells are free.</p>
+        ${STOCKS.map(s => {
+          const price = prices[s.ticker];
+          const held = state.stocks[s.ticker] || 0;
+          const holdVal = held * price;
+          return `<div class="trade-input">
+            <span style="width:50px;font-weight:600;">${s.ticker}</span>
+            <span class="mono dim" style="width:60px;">${fmt(price)}</span>
+            <button class="btn btn-sm btn-outline" onclick="buyStock('${s.ticker}',${price})" ${tc < 100 ? 'disabled' : ''}>Buy $100</button>
+            ${held > 0 ? `<button class="btn btn-sm btn-outline" onclick="sellStock('${s.ticker}',${price})">Sell All (${held.toFixed(2)})</button>` : ''}
+            <span class="dim" style="font-size:0.8rem;">${held > 0 ? held.toFixed(2) + ' shares = ' + fmt(holdVal) : ''}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    `;
+  }
+  
+  return `
+    <div class="timer-bar safe" style="display:flex; justify-content:space-between; align-items:center;">
+      <span>⏱ <span id="quarterTimerDisplay">0:45</span></span>
+      <button class="btn btn-sm btn-outline" onclick="nextQuarter()" style="color:var(--text); border-color:rgba(255,255,255,0.3);">Done trading this quarter →</button>
+    </div>
+    <div class="card">
+      <div class="quarter-label">Quarter ${q + 1} of 4</div>
+      <table class="price-table">
+        <tr><th>Stock</th><th>Price</th><th>Change</th></tr>
+        ${rows}
+        <tr style="border-top:2px solid var(--border);">
+          <td><strong>FUND</strong> <span class="dim">Index</span></td>
+          <td class="mono">${fmt(prices.FUND)}</td>
+          <td class="mono ${fundCls}">${fundDiff > 0 ? '▲ +' : fundDiff < 0 ? '▼ ' : '— '}${fmt(Math.abs(fundDiff)).replace('$','')}</td>
+        </tr>
+      </table>
+    </div>
+    ${tradeSection}
+  `;
+}
+
+function buyStock(ticker, price) {
+  const cost = 100;
+  const fee = calculateFee(cost);
+  const total = cost + fee;
+  if ((state.tradeCash || 0) < total) return;
+  state.tradeCash -= total;
+  state.totalFees += fee;
+  const shares = cost / price;
+  state.stocks[ticker] = (state.stocks[ticker] || 0) + shares;
+  state.txLog.push({ year: state.currentYear+1, quarter: 'Q'+(state.currentQuarter+1), action: 'BUY', ticker, amount: cost, price, shares, fee });
+  render();
+}
+
+function sellStock(ticker, price) {
+  const held = state.stocks[ticker] || 0;
+  if (held <= 0) return;
+  const proceeds = held * price;
+  state.tradeCash = (state.tradeCash || 0) + proceeds;
+  state.stocks[ticker] = 0;
+  state.txLog.push({ year: state.currentYear+1, quarter: 'Q'+(state.currentQuarter+1), action: 'SELL', ticker, amount: Math.round(proceeds), price, shares: held, fee: 0 });
+  render();
+}
+
+function nextQuarter() {
+  clearQuarterTimer();
+  if (state.currentQuarter < 3) {
+    state.currentQuarter++;
+  } else {
+    state.yearPhase = 'events';
+  }
+  render();
+}
+
+function renderEvents() {
+  const yr = state.currentYear;
+  const evts = EVENTS[yr].map(e => `<div class="news-item">✅ ${e}</div>`).join('');
+  
+  return `
+    <div class="card card-accent">
+      <div style="font-size:0.8rem; color:var(--dim); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:4px;">Year ${yr+1} in retrospect</div>
+      <h2>📋 "${YEAR_TITLES[yr]}"</h2>
+      ${evts}
+    </div>
+    <button class="btn btn-primary" onclick="state.yearPhase='record';render();">End of Year Summary →</button>
+  `;
+}
+
+function renderRecord() {
+  const yr = state.currentYear;
+  const q4 = getCurrentPrices(yr, 3);
+  
+  // Convert any remaining trade cash back (once)
+  if (state.tradeCash > 0) {
+    state.cash += state.tradeCash;
+    state.tradeCash = 0;
+  }
+  
+  // Record history (once per year)
+  if (!state.history.find(h => h.year === yr + 1)) {
+    let sv = 0;
+    STOCKS.forEach(s => { sv += (state.stocks[s.ticker]||0) * q4[s.ticker]; });
+    const fv = state.fundShares * q4.FUND;
+    state.history.push({
+      year: yr + 1,
+      choice: state.choice,
+      portfolioValue: Math.round(state.cash + state.savings + fv + sv),
+    });
+  }
+  
+  // Calculate current values
+  let stockVal = 0;
+  const hasStocks = STOCKS.some(s => (state.stocks[s.ticker]||0) > 0);
+  const hasFund = state.fundShares > 0;
+  
+  const holdingsRows = STOCKS.filter(s => (state.stocks[s.ticker]||0) > 0).map(s => {
+    const val = state.stocks[s.ticker] * q4[s.ticker];
+    stockVal += val;
+    return `<tr>
+      <td>${s.ticker} <span class="dim">${s.name}</span></td>
+      <td class="mono">${state.stocks[s.ticker].toFixed(2)}</td>
+      <td class="mono">${fmt(q4[s.ticker])}</td>
+      <td class="mono">${fmt(val)}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="sellAtEOY('${s.ticker}')">Sell</button></td>
+    </tr>`;
+  }).join('');
+  
+  const fundVal = state.fundShares * q4.FUND;
+  const total = state.cash + state.savings + fundVal + stockVal;
+  
+  // Update the history entry with latest value
+  const hEntry = state.history.find(h => h.year === yr + 1);
+  if (hEntry) hEntry.portfolioValue = Math.round(total);
+  
+  const closingPrices = STOCKS.map(s => `<span style="margin-right:12px;"><strong>${s.ticker}:</strong> <span class="mono">${fmt(q4[s.ticker])}</span></span>`).join('');
+  
+  return `
+    <div class="card" style="text-align:center; border: 2px solid var(--blue); background: linear-gradient(180deg, var(--card2) 0%, var(--card) 100%);">
+      <div style="font-size:0.8rem; color:var(--dim); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:4px;">End of Year ${yr + 1}</div>
+      <div style="font-family:'DM Serif Display',serif; font-size:2rem; margin-bottom:4px;">${fmt(total)}</div>
+      <div style="font-size:0.85rem; color:var(--dim);">Total Portfolio Value</div>
+    </div>
+    
+    <div class="card">
+      <h3>Closing Prices</h3>
+      <p class="dim" style="font-size:0.85rem;">${closingPrices}<br><strong>FUND:</strong> <span class="mono">${fmt(q4.FUND)}</span></p>
+    </div>
+    
+    <div class="card">
+      <h3>Your Holdings</h3>
+      <div class="grid-3" style="margin:12px 0;">
+        <div class="summary-stat">
+          <div class="big" style="font-size:1.3rem;">${fmt(state.cash)}</div>
+          <div class="label">Cash</div>
+        </div>
+        <div class="summary-stat">
+          <div class="big" style="font-size:1.3rem;">${fmt(state.savings)}</div>
+          <div class="label">Savings (3%)</div>
+        </div>
+        <div class="summary-stat">
+          <div class="big" style="font-size:1.3rem;">${fmt(fundVal)}</div>
+          <div class="label">Fund (${state.fundShares.toFixed(2)} sh)</div>
+        </div>
+      </div>
+      
+      ${hasFund ? `
+        <div style="padding:10px; background:var(--card2); border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+          <span><strong>Index Fund</strong> — ${state.fundShares.toFixed(2)} shares × ${fmt(q4.FUND)} = <span class="mono">${fmt(fundVal)}</span></span>
+          <button class="btn btn-sm btn-outline" onclick="sellFundAtEOY()">Sell All</button>
+        </div>
+      ` : ''}
+      
+      ${holdingsRows ? `
+        <table class="holdings-table">
+          <tr><th>Stock</th><th>Shares</th><th>Price</th><th>Value</th><th></th></tr>
+          ${holdingsRows}
+        </table>
+      ` : ''}
+      
+      ${state.totalFees > 0 ? `<p class="dim" style="margin-top:10px; font-size:0.85rem;">Total fees paid to date: <span class="mono">${fmt(state.totalFees)}</span></p>` : ''}
+    </div>
+    
+    <p style="text-align:center; color:var(--dim); font-size:0.85rem; margin-bottom:12px;">
+      ${(hasFund || hasStocks) ? 'You can sell investments above to convert to cash, or hold them into next year.' : 'All your value is in cash and savings.'}
+    </p>
+    
+    <div class="card">
+      <h3>📊 Quarterly Prices — Year ${yr + 1}</h3>
+      <div style="overflow-x:auto;">
+        <table class="price-table" style="font-size:0.8rem;">
+          <tr><th></th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr>
+          ${STOCKS.map(s => {
+            const p = PRICES[yr][s.ticker];
+            return '<tr><td><strong>' + s.ticker + '</strong></td>' + p.map(v => '<td class="mono">$' + v + '</td>').join('') + '</tr>';
+          }).join('')}
+          <tr style="border-top:2px solid var(--border);">
+            <td><strong>FUND</strong></td>
+            ${PRICES[yr].FUND.map(v => '<td class="mono">$' + v + '</td>').join('')}
+          </tr>
+        </table>
+      </div>
+    </div>
+    
+    ${(() => {
+      const yearTx = (state.txLog || []).filter(tx => tx.year === yr + 1);
+      if (yearTx.length === 0) return '';
+      const txRows = yearTx.map(tx => {
+        const actionCls = tx.action === 'BUY' ? 'tag tag-blue' : 'tag tag-green';
+        return '<tr>' +
+          '<td>' + tx.quarter + '</td>' +
+          '<td><span class="' + actionCls + '">' + tx.action + '</span></td>' +
+          '<td><strong>' + tx.ticker + '</strong></td>' +
+          '<td class="mono">' + fmt(tx.amount) + '</td>' +
+          '<td class="mono">' + fmt(tx.price) + '/sh</td>' +
+          '<td class="mono">' + tx.shares.toFixed(2) + '</td>' +
+          '<td class="mono">' + (tx.fee > 0 ? fmt(tx.fee) : '—') + '</td>' +
+        '</tr>';
+      }).join('');
+      const yearFees = yearTx.reduce((s,tx) => s + (tx.fee||0), 0);
+      return '<div class="card" style="border-left:3px solid var(--gold);">' +
+        '<h3>📋 Trade Register — Year ' + (yr+1) + '</h3>' +
+        '<p class="dim" style="font-size:0.8rem; margin-bottom:8px;">Copy this to your paper tracker.</p>' +
+        '<div style="overflow-x:auto;">' +
+        '<table class="price-table" style="font-size:0.8rem;">' +
+        '<tr><th>Qtr</th><th>Action</th><th>Stock</th><th>Amount</th><th>Price</th><th>Shares</th><th>Fee</th></tr>' +
+        txRows +
+        '</table></div>' +
+        (yearFees > 0 ? '<p class="dim" style="font-size:0.8rem; margin-top:8px;">Fees this year: <strong class="mono">' + fmt(yearFees) + '</strong></p>' : '') +
+        '</div>';
+    })()}
+    
+    <div style="text-align:center;">
+      <button class="btn btn-primary" style="font-size:1.1rem; padding:14px 40px;" onclick="advanceYear()">
+        ${yr < 14 ? `Continue to Year ${yr + 2} →` : '🏁 See Final Results'}
+      </button>
+    </div>
+  `;
+}
+
+function sellAtEOY(ticker) {
+  const yr = state.currentYear;
+  const price = getCurrentPrices(yr, 3)[ticker];
+  const held = state.stocks[ticker] || 0;
+  if (held <= 0) return;
+  state.cash += held * price;
+  state.stocks[ticker] = 0;
+  state.txLog.push({ year: yr+1, quarter: 'EOY', action: 'SELL', ticker, amount: Math.round(held*price), price, shares: held, fee: 0 });
+  render();
+}
+
+function sellFundAtEOY() {
+  const yr = state.currentYear;
+  const price = getCurrentPrices(yr, 3).FUND;
+  if (state.fundShares <= 0) return;
+  const held = state.fundShares;
+  state.cash += held * price;
+  state.fundShares = 0;
+  state.txLog.push({ year: yr+1, quarter: 'EOY', action: 'SELL', ticker: 'FUND', amount: Math.round(held*price), price, shares: held, fee: 0 });
+  render();
+}
+
+function advanceYear() {
+  if (state.currentYear < 14) {
+    state.currentYear++;
+    state.yearPhase = 'paycheck';
+    state.choice = null;
+    state.currentQuarter = 0;
+  } else {
+    state.phase = 'gameover';
+  }
+  render();
+}
+
+function renderGameOver() {
+  const q4 = getCurrentPrices(14, 3);
+  let stockVal = 0;
+  STOCKS.forEach(s => { stockVal += (state.stocks[s.ticker]||0) * q4[s.ticker]; });
+  const fundVal = state.fundShares * q4.FUND;
+  const total = state.cash + state.savings + fundVal + stockVal;
+  
+  const historyRows = state.history.map(h => {
+    const emoji = h.choice === 'save' ? '💵' : h.choice === 'invest' ? '📈' : '⚡';
+    return `<tr>
+      <td>Year ${h.year}</td>
+      <td>${emoji} ${h.choice}</td>
+      <td class="mono">${fmt(h.portfolioValue)}</td>
+    </tr>`;
+  }).join('');
+  
+  // Benchmarks
+  let saverTotal = 0;
+  for(let i=0;i<15;i++) { saverTotal = (saverTotal + 1000) * 1.03; }
+  
+  app.innerHTML = `
+    <div class="fade-in">
+      <div class="intro-hero" style="padding:30px 0;">
+        <h1>Game Over, ${state.playerName}!</h1>
+        <p>15 years of investing, complete.</p>
+      </div>
+      
+      <div class="grid-3" style="margin-bottom:24px;">
+        <div class="card summary-stat">
+          <div class="big" style="color:var(--green);">${fmt(total)}</div>
+          <div class="label">Your Final Portfolio</div>
+        </div>
+        <div class="card summary-stat">
+          <div class="big dim">${fmt(Math.round(saverTotal))}</div>
+          <div class="label">Pure Saver Benchmark</div>
+        </div>
+        <div class="card summary-stat">
+          <div class="big dim">${fmt(state.totalFees)}</div>
+          <div class="label">Total Fees Paid</div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <h2>Your Journey</h2>
+        <table class="price-table">
+          <tr><th>Year</th><th>Choice</th><th>Portfolio</th></tr>
+          ${historyRows}
+        </table>
+      </div>
+      
+      <div class="card">
+        <h2>Benchmarks</h2>
+        <p style="margin:4px 0;">💵 Pure Saver (3%/yr): <strong class="mono">${fmt(Math.round(saverTotal))}</strong></p>
+        <p style="margin:4px 0;">📈 Fund at Year 15: <strong class="mono">$223</strong> (started at $100)</p>
+        <p style="margin:4px 0;">📈 Pure Investor (~${(15000/100).toFixed(0)} shares): estimate varies by entry prices</p>
+        <p class="dim" style="margin-top:12px;">The fund grew from $100 to $223 — about 5.5% annualized over 15 years.</p>
+      </div>
+      
+      <div class="flex-center" style="margin-top:24px;">
+        <button class="btn btn-primary" onclick="resetGame()">Play Again</button>
+      </div>
+    </div>
+  `;
+}
+
+function resetGame() {
+  localStorage.removeItem('sim_v3');
+  state = newState();
+  render();
+}
+
+// Fix double paycheck issue — only add once
+let lastPaycheckYear = -1;
+const origRenderPaycheck = renderPaycheck;
+renderPaycheck = function() {
+  if (lastPaycheckYear !== state.currentYear) {
+    state.cash += 1000;
+    lastPaycheckYear = state.currentYear;
+  }
+  // Remove the cash addition from the original
+  const fundPrice = getLatestFundPrice();
+  return `
+    <div class="card card-accent">
+      <h2>💰 Paycheck</h2>
+      <p>You receive <strong class="mono">$1,000</strong> in cash.</p>
+      <p class="dim" style="margin-top:8px;">Cash on hand: <strong class="mono">${fmt(state.cash)}</strong></p>
+      ${state.savings > 0 ? `<p class="dim" style="margin-top:4px;">You may convert savings to cash to use this year.</p>
+        <button class="btn btn-sm btn-outline" style="margin-top:8px;" onclick="convertSavings()">Convert ${fmt(state.savings)} Savings to Cash</button>` : ''}
+    </div>
+    <button class="btn btn-primary" onclick="state.yearPhase='news';render();">Read the News →</button>
+  `;
+};
+
+// Fix: the original renderPaycheck was adding cash, remove that
+// Re-declare properly
+(function() {
+  // Track which years we've paid
+  const paidYears = new Set();
+  if (state.history) state.history.forEach(h => paidYears.add(h.year - 1));
+  
+  window.renderPaycheck_v2 = function() {
+    if (!paidYears.has(state.currentYear)) {
+      state.cash += 1000;
+      paidYears.add(state.currentYear);
+    }
+    return `
+      <div class="card card-accent">
+        <h2>💰 Paycheck</h2>
+        <p>You receive <strong class="mono">$1,000</strong> in cash.</p>
+        <p class="dim" style="margin-top:8px;">Cash on hand: <strong class="mono">${fmt(state.cash)}</strong></p>
+        ${state.savings > 0 ? `<p class="dim" style="margin-top:4px;">You may convert savings to cash to use this year.</p>
+          <button class="btn btn-sm btn-outline" style="margin-top:8px;" onclick="convertSavings()">Convert ${fmt(state.savings)} Savings to Cash</button>` : ''}
+      </div>
+      <button class="btn btn-primary" onclick="state.yearPhase='news';render();">Read the News →</button>
+    `;
+  };
+})();
+
+// Override
+renderPaycheck = window.renderPaycheck_v2;
+
+render();
+</script>
+</body>
+</html>
