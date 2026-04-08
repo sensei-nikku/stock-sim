@@ -835,6 +835,7 @@ function renderPlaying() {
     case 'quarters': content = renderQuarters(); break;
     case 'events': content = renderEvents(); break;
     case 'record': content = renderRecord(); break;
+    case 'verify': content = renderVerify(); break;
     case 'reflect': content = renderReflect(); break;
   }
   
@@ -852,7 +853,7 @@ function renderPlaying() {
       </div>
       <div class="phase-indicator">${dots}</div>
       ${getChoiceTrackerHTML()}
-      <div class="step-title">${yp === 'record' ? 'End of Year' : yp === 'reflect' ? 'Reflect' : yp === 'rationale' ? 'Write Your Rationale' : yp === 'soy' ? 'Start of Year — Buy' : yp.charAt(0).toUpperCase() + yp.slice(1)}</div>
+      <div class="step-title">${yp === 'record' ? 'End of Year' : yp === 'verify' ? 'Verify Your Tracker' : yp === 'reflect' ? 'Reflect' : yp === 'rationale' ? 'Write Your Rationale' : yp === 'soy' ? 'Start of Year — Buy' : yp.charAt(0).toUpperCase() + yp.slice(1)}</div>
       ${content}
     </div>
   `;
@@ -1333,9 +1334,43 @@ function renderRecord() {
     })()}
     
     <div style="text-align:center;">
-      <button class="btn btn-primary" style="font-size:1.1rem; padding:14px 40px;" onclick="state.yearPhase='reflect';render();">
-        Record & Reflect →
+      <button class="btn btn-primary" style="font-size:1.1rem; padding:14px 40px;" onclick="state.yearPhase='verify';render();">
+        I've Recorded My Info →
       </button>
+    </div>
+  `;
+}
+
+function renderVerify() {
+  const yr = state.currentYear;
+  const q4 = getCurrentPrices(yr, 3);
+  const choiceEmoji = state.choice === 'save' ? '💵 Save' : state.choice === 'invest' ? '📈 Invest' : '⚡ Trade';
+  
+  let stockVal = 0;
+  STOCKS.forEach(s => { stockVal += (state.stocks[s.ticker]||0) * q4[s.ticker]; });
+  const fundVal = state.fundShares * q4.FUND;
+  const total = state.cash + state.savings + fundVal + stockVal;
+  
+  return `
+    <div class="card" style="text-align:center; border:2px solid var(--gold); padding:40px 24px;">
+      <div style="font-size:3rem; margin-bottom:12px;">✅</div>
+      <h2 style="color:var(--gold); margin-bottom:16px;">Check Your Tracker — Year ${yr + 1}</h2>
+      <div style="background:var(--card2); border-radius:10px; padding:20px; text-align:left; max-width:500px; margin:0 auto 20px;">
+        <p style="font-size:0.95rem; margin-bottom:12px;">Before moving on, verify you copied the correct info onto your paper tracker:</p>
+        <p style="font-size:0.95rem; margin:6px 0;">☐ <strong>Choice:</strong> ${choiceEmoji}</p>
+        <p style="font-size:0.95rem; margin:6px 0;">☐ <strong>Cash:</strong> <span class="mono">${fmt(state.cash)}</span></p>
+        ${state.savings > 0 ? `<p style="font-size:0.95rem; margin:6px 0;">☐ <strong>Savings:</strong> <span class="mono">${fmt(state.savings)}</span></p>` : ''}
+        ${state.fundShares > 0 ? `<p style="font-size:0.95rem; margin:6px 0;">☐ <strong>Fund:</strong> ${state.fundShares.toFixed(2)} shares = <span class="mono">${fmt(fundVal)}</span></p>` : ''}
+        ${STOCKS.filter(s => (state.stocks[s.ticker]||0) > 0).map(s => {
+          const val = state.stocks[s.ticker] * q4[s.ticker];
+          return `<p style="font-size:0.95rem; margin:6px 0;">☐ <strong>${s.ticker}:</strong> ${state.stocks[s.ticker].toFixed(2)} shares = <span class="mono">${fmt(val)}</span></p>`;
+        }).join('')}
+        <p style="font-size:0.95rem; margin:10px 0 0; border-top:1px solid var(--border); padding-top:10px;">☐ <strong>Total Portfolio:</strong> <span class="mono" style="font-size:1.1rem;">${fmt(total)}</span></p>
+      </div>
+      <div class="flex-center">
+        <button class="btn btn-outline" onclick="state.yearPhase='record';render();">← Go Back & Fix</button>
+        <button class="btn btn-primary" style="font-size:1.05rem; padding:12px 32px;" onclick="state.yearPhase='reflect';render();">Everything's Correct →</button>
+      </div>
     </div>
   `;
 }
