@@ -234,11 +234,19 @@ async function playReal(g, years, strategy, opts) {
 
   // ── 6. teacher view ────────────────────────────────────────────────────────────
   console.log('\n[6] teacher');
-  server.setEmail('nicholas.inoue@excelcenteraz.org');
+  server.setEmail(server.ctx.TEACHERS[0]);   // read from the private Code.gs; no teacher email in this public repo
+  // a student whose Workspace username has an apostrophe
+  server.setEmail("o'brien.test@excelcenteraz.org"); { const gg = await openGame(server, BETA); await gg.click(/^Start the practice round/); gg.w.eval('TP.i = TUT_STEPS.length - 1; tutSave(TP); render();'); await gg.click(/^Start the real game/); await playReal(gg, 1, null); }
+  server.setEmail(server.ctx.TEACHERS[0]);
   g = await openGame(server, BETA);
   await g.settle(30);
   ok(/Teacher panel/.test(g.text()), 'teacher sees the panel');
   ok(/Reflections/.test(g.text()) && !!g.btn(/^Read 15$/), 'dashboard has a Reflections column (new.student: Read 15)');
+  await g.click(/^Read 15$/);
+  const obBtn = Array.from(g.doc.querySelectorAll('.lr-dash tr')).find(tr => /o'brien/.test(tr.textContent));
+  obBtn.querySelector('button').click(); await g.settle(3);
+  ok(/Year 1: I kept most of it/.test(g.doc.body.textContent), "Read works for an email with an apostrophe (o'brien)");
+  g.doc.querySelectorAll('.lr-modal-x').forEach(x => x.click());
   await g.click(/^Read 15$/);
   ok(/I saved everything because I did not trust the market yet/.test(g.doc.body.textContent) && /Practice round: finished at \$2,266/.test(g.doc.body.textContent), 'Read shows the typed reflections and the practice result');
   g.doc.querySelector('.lr-modal-x').click();

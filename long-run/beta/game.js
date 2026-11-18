@@ -715,9 +715,9 @@ function dashboardTable(students) {
     } catch (e) {}
     return '<tr><td>' + esc(s.email) + '</td><td>Year ' + (Number(s.year) + 1) + '</td><td>' + esc(s.phase) +
       '</td><td>' + v + '</td><td class="lr-feeltrail">' + esc(feels) + '</td>' +
-      '<td>' + (nRef ? '<button onclick="showReflections(\'' + esc(s.email) + '\')">Read ' + nRef + '</button>' : '<span class="lr-dim">—</span>') + '</td>' +
+      '<td>' + (nRef ? '<button onclick="showReflections(\'' + jsArg(s.email) + '\')">Read ' + nRef + '</button>' : '<span class="lr-dim">—</span>') + '</td>' +
       '<td>' + fmtDate(s.updatedAt) +
-      '</td><td><button onclick="resetStudent(\'' + esc(s.email) + '\')">Reset</button></td></tr>';
+      '</td><td><button onclick="resetStudent(\'' + jsArg(s.email) + '\')">Reset</button></td></tr>';
   }).join('');
   return '<table class="lr-dash"><thead><tr><th>Student</th><th>Progress</th><th>Phase</th><th>Latest value</th><th>Feelings</th><th>Reflections</th><th>Updated</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
@@ -781,6 +781,9 @@ function sparkline(a, b) {
     '<path d="' + path(a) + '" fill="none" stroke="#22c55e" stroke-width="2"/></svg>';
 }
 
+function jsArg(s) {   // a value placed inside onclick="f('...')": JS-escape, then HTML-escape
+  return esc(String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")).replace(/"/g, '&quot;');
+}
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function showError(msg) { var a = document.getElementById('app'); if (a) a.insertAdjacentHTML('afterbegin', '<div class="lr-error">' + esc(msg) + '</div>'); }
 
