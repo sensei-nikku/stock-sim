@@ -53,8 +53,10 @@ function makeServer() {
     insertSheet(n) { sheets[n] = makeSheet(n); return sheets[n]; },
     getSpreadsheetTimeZone() { return 'America/Phoenix'; }
   };
+  const props = {};
   const ctx = {
     console,
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = v; } }) },
     JSON, Math, Date, String, Number, Object, Array,
     SpreadsheetApp: { getActiveSpreadsheet: () => ss, openById: () => ss },
     Session: { getActiveUser: () => ({ getEmail: () => email }), getScriptTimeZone: () => 'America/Phoenix' },
@@ -67,6 +69,7 @@ function makeServer() {
           evaluate() {
             let html = fs.readFileSync(t.__file, 'utf8');
             html = html.replace(/<\?!=\s*BOOT\s*\?>/g, t.BOOT);
+            html = html.replace(/<\?!=\s*longRunRelease\(\)\s*\?>/g, () => ctx.longRunRelease());
             html = html.replace(/<\?!=\s*include\('(\w+)'\);?\s*\?>/g, (m, f) => fs.readFileSync(path.join(SRC, f + '.html'), 'utf8'));
             const out = { getContent: () => html, setTitle() { return out; }, addMetaTag() { return out; }, setXFrameOptionsMode() { return out; } };
             return out;
@@ -81,9 +84,20 @@ function makeServer() {
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(SRC, 'Market.gs'), 'utf8'), ctx, { filename: 'Market.gs' });
   vm.runInContext(fs.readFileSync(path.join(SRC, 'Code.gs'), 'utf8'), ctx, { filename: 'Code.gs' });
+  const relGs = path.join(REPO, 'apps-script/Release.gs');
+  if (fs.existsSync(relGs)) vm.runInContext(fs.readFileSync(relGs, 'utf8'), ctx, { filename: 'Release.gs' });
   return {
-    ctx, sheets,
+    ctx, sheets, props,
     setEmail(e) { email = e; },
+    // pin a frozen release folder the way a teacher would in Script Properties
+    useRelease(id, opts) {
+      if (id == null) { delete props.LIVE_RELEASE; return; }
+      const crypto = require('crypto'), files = {};
+      for (const f of ['styles.css', 'data.js', 'persistence.js', 'game.js']) {
+        files[f] = 'sha384-' + crypto.createHash('sha384').update(fs.readFileSync(path.join(REPO, 'releases', id, f))).digest('base64');
+      }
+      props.LIVE_RELEASE = (opts && opts.raw) || JSON.stringify({ id, sha: 'a'.repeat(40), files });
+    },
     renderIndex(indexFile) {
       const t = ctx.HtmlService.createTemplateFromFile('Index');
       t.__file = indexFile;
@@ -99,7 +113,7 @@ function makeServer() {
 // ---------------------------------------------------------------- client ----
 class LocalLoader extends ResourceLoader {
   fetch(url, opts) {
-    const m = url.match(/^https:\/\/(?:sensei-nikku\.github\.io\/stock-sim|cdn\.jsdelivr\.net\/gh\/sensei-nikku\/stock-sim@main)\/long-run\/(live|beta)\/([\w.]+)/);
+    const m = url.match(/^https:\/\/(?:sensei-nikku\.github\.io\/stock-sim|cdn\.jsdelivr\.net\/gh\/sensei-nikku\/stock-sim@[\w.-]+)\/long-run\/(live|beta|releases\/[\w.-]+)\/([\w.]+)/);
     if (m) {
       if (this.blockPages && url.includes('github.io')) return Promise.reject(new Error('blocked'));
       const f = path.join(REPO, m[1], m[2]);

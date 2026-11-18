@@ -5,7 +5,7 @@ const { card, cardBtn, moneyNum } = require('./play');
 
 let pass = 0, fail = 0;
 function ok(cond, msg) { if (cond) { pass++; console.log('  ok   ' + msg); } else { fail++; console.log('  FAIL ' + msg); } }
-const BETA = { params: { beta: '1' } };
+const BETA = {};   // students now get the pinned release; these tests pin v2 (the reviewed beta)
 const near = (a, b, tol) => Math.abs(a - b) <= (tol == null ? 0.011 : tol);
 
 function storageOf(g) { const o = {}; const ls = g.w.localStorage; for (let i = 0; i < ls.length; i++) o[ls.key(i)] = ls.getItem(ls.key(i)); return o; }
@@ -79,6 +79,7 @@ async function playReal(g, years, strategy, opts) {
 
 (async () => {
   const server = makeServer();
+  server.useRelease('2026-11-18-v2');
 
   // ── 1. brand-new student: practice round, HOLD at the ShopRight bump ──────────
   console.log('\n[1] new student, practice round (hold)');
@@ -196,10 +197,12 @@ async function playReal(g, years, strategy, opts) {
   // ── 4. a student already mid-game (old save) never sees practice ─────────────
   console.log('\n[4] existing save mid-game');
   server.setEmail('veteran@excelcenteraz.org');
-  g = await openGame(server, { /* live */ });
-  await playReal(g, 2, null);                    // two years on the LIVE build (old save shape)
+  server.useRelease('2026-11-18-classic');
+  g = await openGame(server, {});
+  await playReal(g, 2, null);                    // two years on the classic release (old save shape)
+  server.useRelease('2026-11-18-v2');
   g = await openGame(server, BETA);
-  ok(/Start of Year 3/.test(g.text()) && !/practice round/i.test(g.text()), 'a Year-3 save from the old build opens straight into Year 3 on beta');
+  ok(/Start of Year 3/.test(g.text()) && !/practice round/i.test(g.text()), 'a Year-3 save from the classic release opens straight into Year 3 on v2');
   await playReal(g, 1, null);
   ok(g.errors.length === 0 && /Start of Year 4/.test(g.text()), 'old save keeps playing on beta without errors');
 

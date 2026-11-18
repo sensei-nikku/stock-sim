@@ -1,5 +1,5 @@
-// Baseline: the LIVE channel (today's game, moved to GitHub unchanged) loads
-// through the new shell and plays 15 years end to end.
+// The shell: pinned releases (Script Property LIVE_RELEASE), teacher-only beta,
+// fail-closed without a pin, jsDelivr fallback, rollback.
 'use strict';
 const { makeServer, openGame } = require('./sim');
 const { playGame, cardBtn, moneyNum } = require('./play');
@@ -9,58 +9,60 @@ function ok(cond, msg) { if (cond) { pass++; console.log('  ok   ' + msg); } els
 
 (async () => {
   const server = makeServer();
+  const CLASSIC = '2026-11-18-classic', V2 = '2026-11-18-v2';
+  const betaTag = (g) => Array.from(g.doc.querySelectorAll('body > div')).some(d => d.textContent === 'BETA');
 
-  // 1. shell loads the live build from Pages
+  // 1. pinned release: the shell loads releases/<id>/ from Pages, in order
+  server.useRelease(CLASSIC);
   server.setEmail('saver.bot@excelcenteraz.org');
   let g = await openGame(server);
-  ok(!!g.doc.querySelector('#app .lr-card'), 'shell boots the live build');
-  ok(g.loader.loaded.join(',') === 'live/styles.css,live/data.js,live/persistence.js,live/game.js', 'loads styles, data, persistence, game in order from Pages: ' + g.loader.loaded.join(','));
-  const betaTag = () => Array.from(g.doc.querySelectorAll('body > div')).some(d => d.textContent === 'BETA');
-  ok(!betaTag(), 'no BETA tag on live');
-
-  // header-vs-card mismatch probe (known bug)
-  const mism = [];
-  const checks = {
-    quarter(g) {
-      const head = moneyNum(g.doc.querySelector('.lr-port-val').textContent);
-      const nw = Array.from(g.doc.querySelectorAll('.lr-standing > div')).find(d => /Net worth/.test(d.textContent));
-      const cardV = moneyNum(nw.querySelector('strong').textContent);
-      if (Math.abs(head - cardV) > 1) mism.push(`Y${g.G().year + 1} ${g.G().phase}: header ${head} vs card ${cardV}`);
-    },
-    verify() {}
-  };
-  const saver = await playGame(g, null, checks);
-  console.log('  saver final:', JSON.stringify(saver));
-  ok(Math.abs(saver['What you actually did'] - saver["If you'd left it all in savings"]) <= 1, 'pure saver lands on the savings benchmark');
+  ok(!!g.doc.querySelector('#app .lr-card'), 'shell boots the pinned release');
+  ok(g.loader.loaded.join(',') === ['styles.css', 'data.js', 'persistence.js', 'game.js'].map(f => 'releases/' + CLASSIC + '/' + f).join(','), 'loads styles, data, persistence, game in order from releases/' + CLASSIC + ': ' + g.loader.loaded.join(','));
+  ok(!betaTag(g), 'no BETA tag on the release');
+  const saver = await playGame(g, null, null);
+  ok(Math.abs(saver['What you actually did'] - saver["If you'd left it all in savings"]) <= 1 && saver['What you actually did'] === 69201, 'classic release: pure saver lands on $69,201');
   ok(g.errors.length === 0, 'no page errors (' + g.errors.length + ')');
-  console.log('  header/card mismatches seen:', mism.length, mism.slice(0, 3));
 
-  // 2. indexer
+  // 2. indexer on the classic release
   server.setEmail('index.bot@excelcenteraz.org');
   g = await openGame(server);
   const idx = await playGame(g, async (g) => {
-    for (let k = 0; k < 6; k++) {
-      const b = cardBtn(g, 'Index 5', /^\+\$1000$/);
-      if (!b || b.disabled) break;
-      b.click(); await g.settle(3);
-    }
+    for (let k = 0; k < 6; k++) { const b = cardBtn(g, 'Index 5', /^\+\$1000$/); if (!b || b.disabled) break; b.click(); await g.settle(3); }
   });
-  console.log('  indexer final:', JSON.stringify(idx));
   ok(idx['What you actually did'] > idx["If you'd left it all in savings"], 'indexer beats saving');
-  ok(g.errors.length === 0, 'no page errors (' + g.errors.length + ')');
 
-  // 3. Pages blocked -> jsDelivr fallback
+  // 3. Pages blocked -> jsDelivr at the pinned commit
   server.setEmail('fallback.bot@excelcenteraz.org');
   g = await openGame(server, { blockPages: true });
-  ok(!!g.doc.querySelector('#app .lr-card'), 'falls back to jsDelivr when Pages is blocked: ' + g.loader.loaded.join(','));
+  ok(!!g.doc.querySelector('#app .lr-card') && g.loader.loaded.every(x => x.includes('(jsdelivr)') && x.startsWith('releases/')), 'falls back to jsDelivr at the pinned commit when Pages is blocked: ' + g.loader.loaded.join(','));
 
-  // 4. beta channel
-  server.setEmail('beta.bot@excelcenteraz.org');
+  // 4. ?beta=1 is teacher-only
+  server.setEmail('curious.student@excelcenteraz.org');
   g = await openGame(server, { params: { beta: '1' } });
-  ok(g.loader.loaded[0] === 'beta/styles.css', '?beta=1 loads the beta build');
-  ok(Array.from(g.doc.querySelectorAll('body > div')).some(d => d.textContent === 'BETA'), 'BETA tag shows on beta');
+  ok(g.loader.loaded[0] === 'releases/' + CLASSIC + '/styles.css' && !betaTag(g), 'a student adding ?beta=1 still gets the approved release');
+  server.setEmail(server.ctx.TEACHERS[0]);
+  g = await openGame(server, { params: { beta: '1' } });
+  ok(g.loader.loaded[0] === 'beta/styles.css' && betaTag(g), 'the teacher with ?beta=1 gets the beta build and the BETA tag');
 
-  // 5. the OLD Index.html still works too (rollback path)
+  // 5. fails closed with no pin, or a malformed one
+  server.useRelease(null);
+  server.setEmail('saver.bot@excelcenteraz.org');
+  g = await openGame(server);
+  ok(/hasn't been released yet/.test(g.text()) && g.loader.loaded.length === 0, 'no LIVE_RELEASE: "not released" and nothing loads');
+  server.useRelease(CLASSIC, { raw: '{"id":"x","sha":"abc","files":{}}' });
+  g = await openGame(server);
+  ok(/hasn't been released yet/.test(g.text()) && g.loader.loaded.length === 0, 'malformed LIVE_RELEASE: same, nothing loads');
+  server.useRelease(CLASSIC, { raw: '{"id":"x</script><script>alert(1)//","sha":"' + 'a'.repeat(40) + '","files":{}}' });
+  g = await openGame(server);
+  ok(/hasn't been released yet/.test(g.text()) && g.errors.length === 0, 'a pin with markup in it is rejected, not inlined');
+
+  // 6. switching the pin switches what students get, no redeploy
+  server.useRelease(V2);
+  server.setEmail('new.after.switch@excelcenteraz.org');
+  g = await openGame(server);
+  ok(g.loader.loaded[0] === 'releases/' + V2 + '/styles.css' && /practice round/i.test(g.text()), 'changing LIVE_RELEASE to v2 serves the new version on the next load');
+
+  // 7. the OLD Index.html still works (rollback path)
   server.setEmail('rollback.bot@excelcenteraz.org');
   g = await openGame(server, { indexFile: '/home/claude/longrun-src/Index.html' });
   ok(!!g.doc.querySelector('#app .lr-card'), 'old Index.html (rollback) still boots');
