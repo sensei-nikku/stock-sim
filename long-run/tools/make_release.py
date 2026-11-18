@@ -29,8 +29,8 @@ def pin(rid):
     stored = json.loads((d / 'HASHES.json').read_text())
     assert hashes == stored, 'release files changed since they were frozen'
     rel = str(d.relative_to(ROOT.parent))
-    sha = subprocess.check_output(['git', 'log', '-1', '--format=%H', '--', rel], cwd=ROOT, text=True).strip()
-    dirty = subprocess.check_output(['git', 'status', '--porcelain', '--', rel], cwd=ROOT, text=True).strip()
+    sha = subprocess.check_output(['git', 'log', '-1', '--format=%H', '--', rel], cwd=ROOT.parent, text=True).strip()
+    dirty = subprocess.check_output(['git', 'status', '--porcelain', '--', rel], cwd=ROOT.parent, text=True).strip()
     assert sha and not dirty, 'commit and push the release folder first'
     print(json.dumps({'id': rid, 'sha': sha, 'files': hashes}, separators=(',', ':')))
 
