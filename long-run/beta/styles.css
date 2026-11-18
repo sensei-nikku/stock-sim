@@ -306,3 +306,40 @@ button:disabled:hover { background: var(--card2); border-color: var(--line); }
 .lr-galcell { background: var(--card2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; }
 .lr-gallabel { font-family: var(--mono); font-size: 12px; font-weight: 600; margin-bottom: 4px; }
 .lr-galspark { display: block; width: 100%; }
+
+/* ── practice round (Nov 2026) ── */
+.lr-tut-badge { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--gold);
+  border: 1px solid rgba(245,158,11,.45); border-radius: 14px; padding: 4px 10px; white-space: nowrap; }
+.lr-coach { background: rgba(59,130,246,.10); border: 1px solid rgba(59,130,246,.38); border-radius: 12px; padding: 12px 16px; margin: 14px 0; }
+.lr-coach p { margin: 4px 0 0; font-size: 15px; }
+.lr-coach-tag { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--blue); }
+.lr-coach-after { background: rgba(34,197,94,.08); border-color: rgba(34,197,94,.38); }
+.lr-coach-after .lr-coach-tag { color: var(--pos); }
+.lr-spot { border-color: rgba(59,130,246,.6); box-shadow: 0 0 0 1px rgba(59,130,246,.25); }
+.lr-locked { opacity: .5; }
+.lr-lockchip { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 10px; padding: 1px 7px; white-space: nowrap; }
+@keyframes lrPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,.55); } 50% { box-shadow: 0 0 0 7px rgba(34,197,94,0); } }
+.lr-pulse { background: var(--accent); color: #04130b; border-color: var(--accent); font-weight: 700; animation: lrPulse 1.4s ease-in-out infinite; }
+.lr-pulse:hover { background: #2fd472; border-color: #2fd472; }
+.lr-recap { margin: 14px 0; border-left: 3px solid var(--line); padding: 4px 0 4px 14px; }
+.lr-recap h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lr-recap p { margin: 0; }
+.lr-recap-rule { border-left-color: var(--gold); }
+.lr-guide { border-left-color: var(--blue); background: rgba(59,130,246,.06); border-radius: 0 10px 10px 0; padding: 10px 14px; }
+.lr-tut-list { margin: 6px 0 0; padding-left: 20px; }
+.lr-tut-list li { margin: 4px 0; }
+.lr-lockedlist { margin-top: 18px; opacity: .7; }
+.lr-lockedlist h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lr-lockrow { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 7px 2px;
+  border-bottom: 1px solid var(--line); font-size: 14px; }
+.lr-lockrow > span:first-child { flex: 1 1 140px; }
+.lr-lockheld { font-family: var(--mono); font-size: 13px; color: var(--muted); min-width: 120px; text-align: right; }
+.lr-spot { margin: 14px 0 0; }
+@media (max-width: 560px) { .lr-tut-badge { display: none; } }
+
+/* ── typed year-end reflection ── */
+.lr-reflect-box { width: 100%; background: var(--card2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; font: inherit; font-size: 15px; resize: vertical; }
+.lr-reflect-box:focus { outline: none; border-color: var(--blue); }
+.lr-reflect-count { font-size: 12px; color: var(--muted); margin-top: 4px; }
