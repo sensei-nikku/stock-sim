@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { margin: 0; background: #0a0f1a; color: #e6edf7;
+           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    .lr-boot { max-width: 520px; margin: 80px auto; padding: 24px; text-align: center; color: #8896b3; line-height: 1.5; }
+    .lr-boot b { color: #e6edf7; }
+    .lr-bootfail { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4); color: #fca5a5;
+                   border-radius: 10px; padding: 16px 18px; text-align: left; }
+  </style>
+</head>
+<body>
+  <div id="app"><div class="lr-boot">Loading <b>The Long Run</b>&hellip;</div></div>
+
+  <!-- doGet injects the student's saved game here, before any engine code runs. -->
+  <script>window.LONGRUN_BOOT = <?!= BOOT ?>;</script>
+
+  <script>
+  /* The Long Run — Apps Script shell (Index.html). Paste this ONCE.
+   *
+   * The game itself (styles, data, persistence, engine) now loads from GitHub:
+   *   https://sensei-nikku.github.io/stock-sim/long-run/live/   <- everyone
+   *   https://sensei-nikku.github.io/stock-sim/long-run/beta/   <- add ?beta=1 to the link
+   * If GitHub Pages can't be reached, it tries jsDelivr (a mirror of the same repo).
+   *
+   * What stays in Apps Script, unchanged: Code.gs (login, saves, the phase machine)
+   * and Market.gs (the future prices — they never leave Google's servers).
+   * The old Styles/Data/Persistence/Game files in this project are no longer loaded.
+   * To roll back: paste the previous Index.html back over this one.
+   */
+  (function () {
+    var SOURCES = [
+      'https://sensei-nikku.github.io/stock-sim/long-run/',
+      'https://cdn.jsdelivr.net/gh/sensei-nikku/stock-sim@main/long-run/'
+    ];
+    var SCRIPTS = ['data.js', 'persistence.js', 'game.js'];   // order matters
+    var stamp = '?v=' + Math.floor(Date.now() / 60000);       // new copy at most once a minute
+
+    function fail() {
+      document.getElementById('app').innerHTML =
+        '<div class="lr-boot"><div class="lr-bootfail"><b>The game couldn\'t load.</b><br>' +
+        'Refresh the page and try again. If it still won\'t load, the game is down for now &mdash; ' +
+        'let your teacher know and work on something else.</div></div>';
+    }
+
+    function loadCss(url, done) {
+      var l = document.createElement('link'), fin = false;
+      function finish() { if (!fin) { fin = true; done(); } }
+      l.rel = 'stylesheet'; l.href = url;
+      l.onload = finish; l.onerror = finish;      // unstyled beats not loading at all
+      setTimeout(finish, 4000);
+      document.head.appendChild(l);
+    }
+
+    function loadScripts(root, i, ok, bad) {
+      if (i >= SCRIPTS.length) { ok(); return; }
+      var s = document.createElement('script');
+      s.src = root + SCRIPTS[i] + stamp;
+      s.onload = function () { loadScripts(root, i + 1, ok, bad); };
+      s.onerror = bad;
+      document.body.appendChild(s);
+    }
+
+    function start(channel) {
+      var si = 0;
+      function tryNext() {
+        if (si >= SOURCES.length) { fail(); return; }
+        var root = SOURCES[si++] + channel + '/';
+        loadCss(root + 'styles.css' + stamp, function () {
+          loadScripts(root, 0, function () {
+            if (channel === 'beta') {
+              document.body.insertAdjacentHTML('beforeend',
+                '<div style="position:fixed;left:10px;bottom:10px;z-index:99;background:#f59e0b;color:#111;' +
+                'font:700 11px/1 sans-serif;letter-spacing:.08em;padding:5px 9px;border-radius:4px">BETA</div>');
+            }
+          }, tryNext);
+        });
+      }
+      tryNext();
+    }
+
+    // ?beta=1 on the web-app link loads the test build. Anything else loads live.
+    var picked = false;
+    function pick(channel) { if (!picked) { picked = true; start(channel); } }
+    try {
+      google.script.url.getLocation(function (loc) {
+        var p = (loc && loc.parameter) || {};
+        pick(p.beta ? 'beta' : 'live');
+      });
+      setTimeout(function () { pick('live'); }, 1500);
+    } catch (e) { pick('live'); }
+  })();
+  </script>
+</body>
+</html>
