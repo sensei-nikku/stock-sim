@@ -50,6 +50,12 @@ var Server = (function () {
       return call_('advance', [year, phase, stateBlob, choice]);
     },
 
+    // The 💾 Save button: write the game to the sheet now, at the current position.
+    // Resolves { ok } or { ok:false, stale, boot } or { ok:false, error }.
+    saveNow: function (year, phase, stateBlob) {
+      return call_('saveNow', [year, phase, stateBlob]);
+    },
+
     // Practice-round checkpoint (only accepted before the live market starts). Resolves { ok }.
     savePractice: function (stateBlob) {
       return call_('savePractice', [stateBlob]);

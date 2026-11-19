@@ -301,13 +301,13 @@ async function playYear(g, strategy, log) {
   await g.settle(20);
   ok(g.doc.getElementById('lr-busy').className === '' && /Quarter 1/.test(text(g)), 'the wait screen goes away when the server answers');
   ok(server.cache['row|waiter@excelcenteraz.org'] > 1, 'the server remembers the student\'s row (no rescan per click)');
-  // the teacher sorts the sheet: cached rows now point at someone else -> must rescan, never write into another student's row
+  // the teacher sorts the sheet mid-year: the year-end save must still land in the right row
   const srows = server.sheets.Saves.rows, hdr = srows.shift(); srows.reverse(); srows.unshift(hdr);
   const otherBefore = JSON.stringify(srows.find(r => r[0] === 'v3.student@excelcenteraz.org'));
-  while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor')) await g.click(/^Anxious$/);
-  await g.click(/^Advance to Q2/);
-  ok(g.G().phase === 'q1' && srows.find(r => r[0] === 'waiter@excelcenteraz.org')[3] === 'q1' &&
-     JSON.stringify(srows.find(r => r[0] === 'v3.student@excelcenteraz.org')) === otherBefore, 'after the sheet is re-sorted, saves still land in the right row');
+  for (let q = 0; q < 4; q++) { while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor')) await g.click(/^Anxious$/); await g.click(/^(Advance to Q|Close out the year)/); }
+  await g.click(/^Calm$/); await type(g, '.lr-reflect-box', 'Year six was calm and I kept my paycheck going in.'); await g.click(/^On to Year 7/);
+  ok(g.G().year === 1 && srows.find(r => r[0] === 'waiter@excelcenteraz.org')[2] === 1 &&
+     JSON.stringify(srows.find(r => r[0] === 'v3.student@excelcenteraz.org')) === otherBefore, 'after the sheet is re-sorted, the year-end save still lands in the right row');
   // mismatched server files: the game says so instead of half-working
   const realPF = C.publicForecast_;
   C.publicForecast_ = undefined;
@@ -319,6 +319,55 @@ async function playYear(g, strategy, log) {
   g = await openGame(server);
   ok(/server files don't match/.test(text(g)), 'Code.gs from an older version (no version number): the same teacher message');
   C.bootPayload_ = realBoot;
+
+  // ── 12. hot copy: the sheet is written once a year, on Save, and survives a lost cache ──
+  console.log('\n[12] fast saves (cache) and durable saves (sheet)');
+  server.setEmail('hot@excelcenteraz.org');
+  g = await openGame(server);
+  await playPractice(g, 'hold');
+  await g.click(/^On to Year 6/);
+  const sheetRow = () => server.sheets.Saves.rows.find(r => r[0] === 'hot@excelcenteraz.org');
+  const before6 = JSON.stringify(sheetRow());
+  await g.click(/^Begin Quarter 1/);
+  for (let q = 0; q < 3; q++) { while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor')) await g.click(/^Anxious$/); await g.click(/^Advance to Q/); }
+  ok(g.G().phase === 'q3' && JSON.stringify(sheetRow()) === before6, 'four quarter clicks: the sheet was not touched (cache only)');
+  // 💾 Save mid-quarter, after a trade
+  while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor')) await g.click(/^Anxious$/);
+  const idxBuy = cardBtn(g, 'Index 5', /^\+\$100$/); idxBuy.click(); await g.settle(3);
+  const hysAfterBuy = g.G().hys;
+  g.doc.querySelector('.lr-chip').click();
+  ok(g.doc.getElementById('lr-busy').className === 'on' && /Saving/.test(g.doc.getElementById('lr-busy').textContent), 'Save shows the wait screen ("Saving…")');
+  await g.settle(20);
+  ok(sheetRow()[3] === 'q3' && Math.abs(JSON.parse(sheetRow()[5]).hys - hysAfterBuy) < 0.01 && /Saved/.test(g.doc.querySelector('.lr-chip').textContent), 'Save writes the sheet now, trades included');
+  // the cache loses everything (or 6 hours pass): reload resumes from the saved point
+  for (const k in server.cache) delete server.cache[k];
+  g = await openGame(server);
+  ok(g.G().phase === 'q3' && Math.abs(g.G().hys - hysAfterBuy) < 0.01 && g.errors.length === 0, 'cache lost: reload resumes at the saved quarter, with the trade');
+  // close out the year: the sheet is written at the year end
+  while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor')) await g.click(/^Anxious$/);
+  await g.click(/^Close out the year/);
+  await g.click(/^Calm$/); await type(g, '.lr-reflect-box', 'I saved in the middle of the year and nothing was lost.'); await g.click(/^On to Year 7/);
+  ok(sheetRow()[2] === 1 && sheetRow()[3] === 'choose', 'the end of the year writes the sheet (Year 7, start of year)');
+  // cache lost mid-year with no Save: the game falls back to the last year end, no errors
+  await g.click(/^Begin Quarter 1/);
+  while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor')) await g.click(/^Anxious$/);
+  await g.click(/^Advance to Q2/);
+  for (const k in server.cache) delete server.cache[k];
+  while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor')) await g.click(/^Anxious$/);
+  await g.click(/^Advance to Q3/);
+  ok(g.G().year === 1 && g.G().phase === 'choose' && /Start of Year 7/.test(text(g)) && g.errors.length === 0, 'cache lost mid-year: back to the start of Year 7 (the last year end), no errors');
+  await g.click(/^Begin Quarter 1/);
+  ok(g.G().phase === 'q0', '...and play continues');
+  // the dashboard shows where students are right now, from the cache
+  server.setEmail(C.TEACHERS[0]);
+  let tg = await openGame(server); await tg.settle(30);
+  const hrow = Array.from(tg.doc.querySelectorAll('.lr-dash tr')).find(tr => tr.textContent.includes('hot@excelcenteraz.org'));
+  ok(hrow && /Year 7/.test(hrow.textContent) && /q0/.test(hrow.textContent), 'dashboard shows live progress (Year 7, q0) though the sheet says start of year');
+  // a teacher reset clears the cached game too
+  ok(C.resetStudent('hot@excelcenteraz.org').ok, 'teacher resets the student');
+  server.setEmail('hot@excelcenteraz.org');
+  g = await openGame(server, { seedStorage: {} });
+  ok(g.G().year === 0 && g.G().phase === 'choose' && !g.G().tutorialDone, 'after a reset the student starts over (the cached game is gone too)');
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

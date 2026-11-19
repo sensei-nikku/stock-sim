@@ -60,7 +60,8 @@ function makeServer() {
     SpreadsheetApp: { getActiveSpreadsheet: () => ss, openById: () => ss },
     Session: { getActiveUser: () => ({ getEmail: () => email }), getScriptTimeZone: () => 'America/Phoenix' },
     LockService: { getUserLock: () => ({ waitLock() {}, releaseLock() {} }), getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
-    CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = String(v); }, remove: (k) => { delete cache[k]; } }) },
+    CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = String(v); }, remove: (k) => { delete cache[k]; },
+                                              getAll: (ks) => { const o = {}; ks.forEach((k) => { if (k in cache) o[k] = cache[k]; }); return o; } }) },
     Utilities: { formatDate: (d) => new Date(d).toISOString() },
     HtmlService: {
       XFrameOptionsMode: { ALLOWALL: 'ALLOWALL', DEFAULT: 'DEFAULT' },

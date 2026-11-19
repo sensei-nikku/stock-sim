@@ -84,6 +84,7 @@ function ok(cond, msg) { if (cond) { pass++; console.log('  ok   ' + msg); } els
   ok(server.sheets.Saves.rows.find(r => r[0] === 'blob.bot@excelcenteraz.org')[3] === 'choose', '...and the refused saves never reached the sheet');
   r = C.advance(0, 'choose', '{}', 'TRADE');
   ok(r.ok === true && r.phase === 'q0', 'a normal save still goes through');
+  for (const k in server.cache) delete server.cache[k];          // force a trip to the sheet
   const realGetSheet = C.getSheet_;
   C.getSheet_ = () => { throw new Error('Exception: Service Spreadsheets failed at Code.gs:63 (internal detail)'); };
   r = C.advance(0, 'q0', '{}');

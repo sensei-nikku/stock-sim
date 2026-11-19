@@ -185,12 +185,12 @@ function busyLabel() {
   if (p === 'verify') return G.year >= LAST_SERVER_YEAR ? 'Adding up 25 years\u2026' : 'Saving your year\u2026';
   return 'Saving\u2026';
 }
-function busy(on) {
+function busy(on, label) {
   var el = document.getElementById('lr-busy');
   if (!el) { el = document.createElement('div'); el.id = 'lr-busy'; document.body.appendChild(el); }
   clearTimeout(BUSY_T);
   if (!on) { el.className = ''; el.innerHTML = ''; document.body.classList.remove('lr-busy-on'); return; }
-  el.innerHTML = '<div class="lr-busy-bar"></div><div class="lr-busy-msg" role="status"><span class="lr-spin"></span><span id="lr-busy-text">' + busyLabel() + '</span></div>';
+  el.innerHTML = '<div class="lr-busy-bar"></div><div class="lr-busy-msg" role="status"><span class="lr-spin"></span><span id="lr-busy-text">' + (label || busyLabel()) + '</span></div>';
   el.className = 'on'; document.body.classList.add('lr-busy-on');
   BUSY_T = setTimeout(function () {
     var t = document.getElementById('lr-busy-text');
@@ -284,9 +284,22 @@ function chromeTop() {
     (label ? '<div class="lr-phaselabel">' + label + '</div>' : '') +
   '</div>';
 }
-function headerSave(btn) {              // progress auto-commits each step; this just reassures the student
-  var t = btn.innerHTML; btn.innerHTML = '\u2713 Saves each time you Advance'; btn.disabled = true;
-  setTimeout(function () { btn.innerHTML = t; btn.disabled = false; }, 2500);
+// 💾 Save: writes the game to the server now (the game also saves itself at the end of every year).
+var saving = false;
+async function headerSave(btn) {
+  if (saving || advancing) return;
+  var t = btn.innerHTML;
+  function flash(msg) { btn.innerHTML = msg; btn.disabled = true; setTimeout(function () { btn.innerHTML = t; btn.disabled = false; }, 2500); }
+  if (!Server.available || !Server.saveNow || !G || !/^(choose|q[0-3]|verify)$/.test(G.phase)) { flash('\u2713 Saved'); return; }
+  saving = true; busy(true, 'Saving\u2026');
+  try {
+    var res = await Server.saveNow(G.year, G.phase, serialize());
+    busy(false);
+    if (res && res.ok) flash('\u2713 Saved');
+    else if (res && res.stale) { applyBoot(res.boot); render(); }
+    else showError((res && res.error) || 'Couldn\'t save. Try again.');
+  } catch (e) { busy(false); showError('Couldn\'t reach the game server. Try Save again.'); }
+  finally { saving = false; }
 }
 function headerReset() {
   // Student-side reset removed: students can no longer reset their own game.
