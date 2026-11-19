@@ -50,6 +50,11 @@ var Server = (function () {
       return call_('advance', [year, phase, stateBlob, choice]);
     },
 
+    // Practice-round checkpoint (only accepted before the live market starts). Resolves { ok }.
+    savePractice: function (stateBlob) {
+      return call_('savePractice', [stateBlob]);
+    },
+
     // Teacher dashboard. Resolves { ok:true, students:[...] } or { ok:false, error }.
     getClassData: function () {
       return call_('getClassData', []);

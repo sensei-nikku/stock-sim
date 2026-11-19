@@ -19,7 +19,21 @@ The Long Run runs as a Google Apps Script web app. The Apps Script project holds
 3. `python3 tools/make_release.py --pin <id>`; put that JSON in `apps-script/Release.gs`.
 4. The teacher pastes Release.gs, plays it on `/dev` (the editor's test link: runs what's saved, students don't see it),
    then Deploy → Manage deployments → New version. Students get it only at that step.
-   Rollback = Manage deployments → pick the previous version.
+   Rollback = Manage deployments → pick the previous version. That restores Code.gs, Market.gs and the pin
+   together, which matters: a server and a client only work as a matched pair (v3's 25-year server can't run
+   the v2 or classic client), so never roll back by swapping the pin alone.
+
+## Releases
+| Id | What |
+|---|---|
+| `2026-11-19-v3` | 25 years: 5-year practice (balances carry over) → 5 quiet years → 15-year long run. Start-of-year forecasts, random rumors (Street Tattler), mood + reflection stops, printable report. Needs Code.gs/Market.gs v3. |
+| `2026-11-19-v2` | 5-year practice round + 15 years. Needs Code.gs/Market.gs v2. |
+| `2026-11-19-classic` | The original 15-year game, fonts embedded. Needs Code.gs/Market.gs v2. |
+
+## Tests
+`NODE_PATH=<jsdom> LR_SRC=<folder with the private Code.gs + Market.gs>`, then:
+`node tests/test_v3.js` (v3 game, `LR_RELEASE=<id>`), `LR_PROFILE=v3 node tests/test_live.js` (shell + server hardening),
+`python3 tests/test_sri_chrome.py <id>` (real Chrome), `node tests/shots_v3.js` + `python3 tests/shots_v3.py` (screenshots).
 
 The browser refuses any file whose bytes don't match the pinned hash (Subresource Integrity). Fonts are
 inlined in `styles.css`, so its hash covers them; the page fetches nothing else. A push to this repo, or a

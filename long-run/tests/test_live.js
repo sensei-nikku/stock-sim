@@ -8,7 +8,11 @@ function ok(cond, msg) { if (cond) { pass++; console.log('  ok   ' + msg); } els
 
 (async () => {
   const server = makeServer();
-  const V2 = '2026-11-19-v2', CLASSIC = '2026-11-19-classic';
+  // LR_PROFILE=v3: the v3 server (Code.gs/Market.gs v3) only runs v3 clients, so the classic
+  // games and the old-Index rollback are skipped; rollback for v3 = redeploy the previous version.
+  const V3 = process.env.LR_PROFILE === 'v3';
+  const V2 = process.env.LR_SHIPPED || '2026-11-19-v2', CLASSIC = '2026-11-19-classic';
+  const PLAYABLE = V3 ? (process.env.LR_RELEASE || 'dev-v3') : CLASSIC;
   const betaTag = (g) => Array.from(g.doc.querySelectorAll('body > div')).some(d => d.textContent === 'BETA');
   const files = (id) => ['styles.css', 'data.js', 'persistence.js', 'game.js'].map(f => 'releases/' + id + '/' + f).join(',');
 
@@ -19,6 +23,7 @@ function ok(cond, msg) { if (cond) { pass++; console.log('  ok   ' + msg); } els
   ok(!(g.loader.others || []).length, 'no other requests at all (fonts are embedded): ' + (g.loader.others || []).join(', '));
 
   // 2. classic pin: the old game, money unchanged
+  if (!V3) {
   server.useRelease(CLASSIC);
   server.setEmail('saver.bot@excelcenteraz.org');
   g = await openGame(server);
@@ -32,6 +37,8 @@ function ok(cond, msg) { if (cond) { pass++; console.log('  ok   ' + msg); } els
     for (let k = 0; k < 6; k++) { const b = cardBtn(g, 'Index 5', /^\+\$1000$/); if (!b || b.disabled) break; b.click(); await g.settle(3); }
   });
   ok(idx['What you actually did'] > idx["If you'd left it all in savings"], 'classic: indexer beats saving');
+  }
+  server.useRelease(PLAYABLE);
 
   // 3. jsDelivr at the pinned commit when Pages is blocked
   server.setEmail('fallback.bot@excelcenteraz.org');
@@ -49,11 +56,11 @@ function ok(cond, msg) { if (cond) { pass++; console.log('  ok   ' + msg); } els
   server.setEmail('saver.bot@excelcenteraz.org');
   for (const [label, raw] of [['no pin', undefined], ['damaged pin', '{"id":"x","sha":"abc","files":{}}'],
                               ['pin with markup', { id: 'x</script><script>alert(1)//', sha: 'a'.repeat(40), files: {} }]]) {
-    if (raw === undefined) server.useRelease(null); else server.useRelease(CLASSIC, { raw });
+    if (raw === undefined) server.useRelease(null); else server.useRelease(PLAYABLE, { raw });
     g = await openGame(server);
     ok(/hasn't been released yet/.test(g.text()) && g.loader.loaded.length === 0 && g.errors.length === 0, label + ': "not released", nothing loads');
   }
-  server.useRelease(CLASSIC);
+  server.useRelease(PLAYABLE);
 
   // 6. Code.gs hardening
   const C = server.ctx;
@@ -85,9 +92,11 @@ function ok(cond, msg) { if (cond) { pass++; console.log('  ok   ' + msg); } els
   ok(C.resetMe().ok === true, 'the teacher can still reset their own game');
 
   // 7. rollback: the OLD Index.html still boots with the hardened Code.gs
+  if (!V3) {
   server.setEmail('rollback.bot@excelcenteraz.org');
   g = await openGame(server, { indexFile: '/home/claude/longrun-src/Index.html' });
   ok(!!g.doc.querySelector('#app .lr-card'), 'old Index.html (rollback) still boots');
+  }
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

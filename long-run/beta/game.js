@@ -9,6 +9,11 @@
  * server routes to q0). $1,000 post-tax lands EACH quarter into HYS. You deploy to
  * HYS / FUND / INDEX / individual stocks, sell anytime. Taxes settle once a year.
  *
+ * v3 (Nov 2026): 25 game years = practice 1-5 (scripted, in this file, portfolio carries
+ * over) + quiet market 6-10 + the long run 11-25 (server years 0-19). Start-of-year news
+ * forecasts, mid-year rumors with a required mood check, year-end news-vs-reality and
+ * rumor results, a printable summary report.
+ *
  * SOURCE OF TRUTH: this file in sensei-nikku/stock-sim (long-run/<channel>/game.js),
  * loaded by the Apps Script Index.html shell. Nov 2026 changes: practice round
  * (before Year 1), typed reflections, header/net-worth agreement, hindsight
@@ -17,8 +22,9 @@
 
 // ─── small engine helpers ────────────────────────────────────────────────────
 function divCut(t, yr) {                       // banks slash in the collapse; retail trims
-  if (yr === 6) return t === 'TBK' ? 0.50 : 0.75;
-  if (yr === 7 || yr === 8) return t === 'TBK' ? 0.40 : 0.70;
+  var b = yr - QUIET_YEARS;                    // long-run year (the collapse is long-run years 6-8)
+  if (b === 6) return t === 'TBK' ? 0.50 : 0.75;
+  if (b === 7 || b === 8) return t === 'TBK' ? 0.40 : 0.70;
   return 1.0;
 }
 function divPerShare(t, yr) {                   // $/share for ONE quarter
@@ -46,12 +52,14 @@ function freshState() {
     hist: { MED: [], TBK: [], NVT: [], PPK: [], SHP: [], FUND: [], INDEX: [] },
     tape: { MED: [], TBK: [], NVT: [], PPK: [], SHP: [], FUND: [], INDEX: [] },
     emotions: [], reflected: [], reflections: [],
-    tutorialDone: false, tutorial: null,
-    reveal: null, isTeacher: false, preview: false
+    tutorialDone: false, tutorial: null, practice: null, startStake: 0, tp: null,
+    rumorSeen: {}, rumorMoods: {},
+    ver: 3,
+    reveal: null, isTeacher: false, preview: false, showReport: false
   };
 }
 function serialize() {
-  var skip = { reveal: 1, isTeacher: 1, preview: 1 };
+  var skip = { reveal: 1, isTeacher: 1, preview: 1, showReport: 1 };
   var keep = {}; for (var k in G) { if (!skip[k]) keep[k] = G[k]; }
   return JSON.stringify(keep);
 }
@@ -155,6 +163,7 @@ function applyYearEnd(s, yReveal, yearNum) {
 function applyBoot(boot) {
   G = freshState();
   if (boot && boot.state) { try { Object.assign(G, JSON.parse(boot.state)); } catch (e) {} }
+  G.rumorSeen = G.rumorSeen || {}; G.rumorMoods = G.rumorMoods || {};
   if (boot) {
     G.year = boot.year; G.phase = boot.phase; G.choice = boot.choice || G.choice;
     G.unlockedThrough = boot.unlockedThrough; G.reveal = boot.reveal || null;
@@ -193,7 +202,7 @@ function enterQuarterIfNeeded() {
 // waiting in cash is real). Guarded against double-clicks.
 var advancing = false;
 async function commitQuarter() {
-  if (advancing) return;
+  if (advancing || pendingRumor()) return;      // a new rumor must be answered first
   advancing = true;
   var snap = serialize();
   var i = G.hys * (FED_RATES[G.year] / 100 / 4);
@@ -219,23 +228,27 @@ function headerValue() {
   }
   return valueOf(G, null, 100);
 }
+function gameYear() { return G.phase === 'done' ? TOTAL_YEARS : G.year + 1 + PRACTICE_YEARS; }
+function eraName(serverYear) { return serverYear < QUIET_YEARS ? 'The quiet market' : 'The long run'; }
 function chromeTop() {
-  var y = (G.reveal && G.reveal.yearNumber) || (G.year + 1);
-  if (G.phase === 'done') y = 15;
-  var done = G.year || 0;                              // years fully committed
-  var nowSeg = (G.phase === 'done') ? 0 : done + 1;    // year currently in play
+  var y = gameYear();
+  var done = PRACTICE_YEARS + (G.phase === 'done' ? SERVER_YEARS : (G.year || 0));   // practice always counts as done
+  var nowSeg = (G.phase === 'done') ? 0 : done + 1;
   var segs = '';
-  for (var i = 1; i <= 15; i++) {
+  for (var i = 1; i <= TOTAL_YEARS; i++) {
     var cls = i <= done ? 'done' : (i === nowSeg ? 'now' : 'future');
-    segs += '<span class="lr-seg lr-seg-' + cls + '"></span>';
+    var gap = (i === PRACTICE_YEARS + 1 || i === PRACTICE_YEARS + QUIET_YEARS + 1) ? ' lr-seg-break' : '';
+    segs += '<span class="lr-seg lr-seg-' + cls + gap + '"></span>';
   }
   var label = { choose: 'Start of Year', q0: 'Quarters', q1: 'Quarters', q2: 'Quarters',
                 q3: 'Quarters', verify: 'Year in Review', done: 'Final Results' }[G.phase] || '';
+  if (G.phase !== 'done' && label) label = eraName(G.year) + ' \u00B7 ' + label;
   var name = G.playerName ? '<span class="lr-name">' + esc(G.playerName) + '</span>' : '';
   return '<div class="lr-chrome">' +
     '<div class="lr-topbar">' +
       '<div class="lr-actions">' + name +
         '<button class="lr-chip" onclick="headerSave(this)">\uD83D\uDCBE Save</button>' +
+        '<button class="lr-chip" onclick="openReport()">\uD83D\uDDA8 Report</button>' +
       '</div>' +
       '<div class="lr-yearpill">Year ' + y + '</div>' +
       '<div class="lr-port"><span class="lr-port-label">Portfolio</span>' +
@@ -259,6 +272,7 @@ function headerReset() {
 function render() {
   var app = document.getElementById('app');
   if (!G) { app.innerHTML = signInNotice(); return; }
+  if (G.showReport) { app.innerHTML = renderReportView(); return; }
   if (G.isTeacher && !G.preview) { app.innerHTML = renderTeacherPanel(); loadDashboard(); return; }
   if (tutorialPending()) {
     var th = tutRender();
@@ -268,7 +282,9 @@ function render() {
   if (/^q[0-3]$/.test(G.phase)) enterQuarterIfNeeded();   // header must include this quarter's paycheck
   var KNOWN = { choose: 1, q0: 1, q1: 1, q2: 1, q3: 1, verify: 1, done: 1 };
   var html = (KNOWN[G.phase] ? chromeTop() : '') + phaseHtml();
-  if (KNOWN[G.phase]) { html += newsFab() + newsModal(); }
+  var pr = pendingRumor();
+  if (pr) html += rumorModal(pr);                           // a new rumor: must answer how it feels first
+  else if (KNOWN[G.phase]) { html += newsFab() + newsModal(); }
   if (G.isTeacher && G.preview) {
     html = '<div class="lr-previewbar">Previewing as a student<button onclick="exitPreview()">← Teacher panel</button></div>' + html;
   }
@@ -290,19 +306,21 @@ function signInNotice() {
 
 // ─── Year-open ─────────────────────────────────────────────────────────────────
 function renderYearOpen() {
-  var y = G.reveal.yearNumber, fed = FED_RATES[y - 1];
+  var y = gameYear(), fed = FED_RATES[G.year];
   var fedNote = fed <= 1 ? ' — cash earns almost nothing.' : fed >= 4 ? ' — savers are being paid well.' : '.';
-  var first = (G.year === 0);
+  var first = (G.year === 0), longStart = (G.year === QUIET_YEARS);
   var intro = first
-    ? 'This is where the market opens. Your first <strong>' + money(PAYCHECK_Q) + '</strong> paycheck arrives in Quarter 1 — nothing to deploy yet, but read the news and get your bearings.'
+    ? 'Your practice portfolio came with you: the shares and savings below are yours. From here the market is live, and your paycheck is <strong>' + money(PAYCHECK_Q) + '</strong> a quarter. Read this year\'s forecasts, then get your bearings.'
     : 'These are <strong>last year\'s closing prices</strong>. Sell holdings or put savings to work now, before this year\'s first quarter — or just move on and decide quarter by quarter.';
   var p = soyPrices(), idx = soyIndex();
   var rows = INSTRUMENTS.map(function (inst) { return soyRow(inst, p, idx); }).join('');
   return '<div class="lr-card">' +
-    '<div class="lr-year">Start of Year ' + y + '</div>' +
-    '<h2>' + (first ? 'A new year begins' : 'Before the market opens') + '</h2>' +
+    '<div class="lr-year">Start of Year ' + y + ' \u00B7 ' + eraName(G.year) + '</div>' +
+    '<h2>' + (first ? 'Welcome to the live market' : longStart ? 'The long run begins' : 'Before the market opens') + '</h2>' +
     '<p class="lr-muted">' + intro + '</p>' +
     (first ? realGameGuide() : '') +
+    (longStart ? longRunCard() : '') +
+    forecastBlock(G.reveal.news, true) +
     '<div class="lr-fed">High-yield savings pays <strong>' + fed.toFixed(2) + '%</strong> this year' + fedNote + '</div>' +
     '<div class="lr-standing">' +
       '<div><span class="lr-dim">Savings (HYS)</span><strong>' + money(G.hys) + '</strong></div>' +
@@ -345,8 +363,7 @@ var newsOpen = false;
 function toggleNews() { newsOpen = !newsOpen; render(); }
 function newsAvailable() {
   var r = G.reveal; if (!r || !r.news) return 0;
-  var n = Object.keys(r.news).filter(function (k) { return r.news[k]; }).length;
-  return n + ((r.rumors || []).length);
+  return (r.news.length || 0) + ((r.rumors || []).length);
 }
 function newsFab() {
   var total = newsAvailable(); if (!total) return '';
@@ -358,16 +375,17 @@ function newsModal() {
   return '<div class="lr-modal-backdrop" onclick="if(event.target===this)toggleNews()">' +
     '<div class="lr-modal lr-modal-news">' +
       '<button class="lr-modal-x" onclick="toggleNews()">\u00D7</button>' +
-      '<div class="lr-modal-tag" style="color:var(--blue)">Year ' + r.yearNumber + ' \u00B7 the news</div>' +
+      '<div class="lr-modal-tag" style="color:var(--blue)">Year ' + gameYear() + ' \u00B7 the news</div>' +
       '<h3>What\'s moving the market</h3>' +
-      newsBlock(r.news) + rumorBlock(r.rumors) +
+      forecastBlock(r.news, false) + rumorBlock(r.rumors) +
     '</div></div>';
 }
 function renderQuarter() {
-  var r = G.reveal, q = qIndex(), p = curPrices(), idx = curIndex(), y = r.yearNumber, fed = FED_RATES[y - 1];
+  var r = G.reveal, q = qIndex(), p = curPrices(), idx = curIndex(), y = gameYear(), fed = FED_RATES[G.year];
   var cards = INSTRUMENTS.map(function (inst) { return instrumentCard(inst, p, idx, y); }).join('');
   return '<div class="lr-card">' +
     '<div class="lr-year">Year ' + y + ' · Quarter ' + (q + 1) + '</div>' +
+    rumorUpdates(r, q) +
     '<div class="lr-standing">' +
       '<div><span class="lr-dim">Savings (HYS)</span><strong>' + money(G.hys) + '</strong></div>' +
       '<div><span class="lr-dim">HYS rate</span><strong>' + fed.toFixed(2) + '%</strong></div>' +
@@ -443,21 +461,18 @@ function renderVerify() {
   var r = G.reveal, bill = computeBill(G);
   var q4p = {}; TICKERS.forEach(function (t) { q4p[t] = r.prices[t][3]; });
   var preTax = valueOf(G, q4p, r.index[3]);
-  var startV = G.valueHistory.length ? G.valueHistory[G.valueHistory.length - 1] : 0;
+  var startV = G.valueHistory.length ? G.valueHistory[G.valueHistory.length - 1] : (G.startStake || 0);
   var contrib = PAYCHECK_Q * 4, I = G.yr.interest, D = G.yr.divs;
   var market = preTax - startV - contrib - I - D;
   var endV = preTax - bill.total;
-  var saved = saverProjection(r.yearNumber), aheadBy = endV - saved;
+  var saved = saverProjection(G.year + 1), aheadBy = endV - saved;
   var cmp = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin:8px 0 2px;font-size:14px">' +
     '<span>If you had <strong>just saved</strong> every paycheck, you\'d have <strong>' + money(saved) + '</strong></span>' +
     (Math.round(aheadBy) === 0
       ? '<span class="lr-muted" style="font-family:var(--mono);font-weight:700">= same as just saving</span></div>'
       : '<span class="' + (aheadBy > 0 ? 'lr-true' : 'lr-false') + '" style="font-family:var(--mono);font-weight:700">' + (aheadBy > 0 ? '\u25B2 ahead by ' : '\u25BC behind by ') + money(Math.abs(aheadBy)) + '</span></div>');
-  var truthRows = (r.truths || []).map(function (tr) {
-    return '<tr><td>' + esc(tr.text) + '</td><td class="' + (tr.factTrue ? 'lr-true' : 'lr-false') + '">' + (tr.factTrue ? 'TRUE' : 'FALSE') + '</td></tr>';
-  }).join('');
   return '<div class="lr-card">' +
-    '<div class="lr-year">Year ' + r.yearNumber + ' — ' + esc(r.title) + '</div>' +
+    '<div class="lr-year">Year ' + gameYear() + ' — ' + esc(r.title) + ' \u00B7 ' + eraName(G.year) + '</div>' +
     '<div class="lr-gl"><table>' +
       row('Started the year with', money(startV)) +
       row('Your paychecks added', '+' + money(contrib)) +
@@ -471,7 +486,9 @@ function renderVerify() {
     eoyTickerTable(r) +
     eoyGallery(r) +
     taxBillBlock(bill) +
-    '<div class="lr-truths"><h4>What the tabloids got right (and wrong)</h4><table>' + truthRows + '</table></div>' +
+    forecastCheck(r) +
+    rumorResults(r) +
+    storiesBlock(r) +
     hindsightBlock(r) +
     emotionBlock() +
     reflectBlock(r) +
@@ -480,7 +497,7 @@ function renderVerify() {
 }
 function advanceGate(r) {
   var hasE = !!G.emotions[G.year], hasR = !!G.reflected[G.year];
-  if (hasE && hasR) return '<button id="lr-gate" class="lr-advance" onclick="commitVerify()">' + (G.year >= 14 ? 'See your final results →' : 'On to Year ' + (r.yearNumber + 1) + ' →') + '</button>';
+  if (hasE && hasR) return '<button id="lr-gate" class="lr-advance" onclick="commitVerify()">' + (G.year >= LAST_SERVER_YEAR ? 'See your final results →' : 'On to Year ' + (gameYear() + 1) + ' →') + '</button>';
   var msg = !hasE ? '↑ Tap how this year felt to continue' : '↑ Write a sentence or two above to continue';
   return '<button id="lr-gate" class="lr-advance" disabled style="opacity:.45;cursor:not-allowed;">' + msg + '</button>';
 }
@@ -524,7 +541,7 @@ function eoyGallery(r) {
     return '<div class="lr-galcell"><div class="lr-gallabel" style="color:' + meta.color + '">' + label + '</div>' +
       histSpark(allTimeSeries(inst), meta.color) + '</div>';
   }).join('');
-  return '<div class="lr-gallery"><h4>Price history through Year ' + r.yearNumber + '</h4>' +
+  return '<div class="lr-gallery"><h4>Price history through Year ' + gameYear() + '</h4>' +
     '<div class="lr-galgrid">' + cells + '</div></div>';
 }
 function taxBillBlock(b) {
@@ -589,6 +606,10 @@ function reflectInput(el) {                // no re-render while typing (it woul
 }
 function journalPrompt(r) {
   var idxRet = r.index[3] / soyIndex() - 1;
+  if (G.year === QUIET_YEARS - 1)
+    return 'The quiet market is over. What did five calm years teach you about how you want to invest when things get loud?';
+  if (G.year === LAST_SERVER_YEAR)
+    return 'Twenty-five years. Which of your habits would you keep if this were your real paycheck, and which would you drop?';
   if (G.yr.realShort < -50 || G.yr.realLong < -50)
     return 'You sold at a loss this year. What were you feeling when you hit sell — and would you make that same call again?';
   if (G.yr.realShort > 50)
@@ -607,6 +628,9 @@ async function commitVerify() {
   if (!G.emotions[G.year] || !G.reflected[G.year]) return;
   advancing = true;
   var snap = serialize();                 // before destructive year-end (tax, tape, reset)
+  G.rumorLog = (G.rumorLog || []).concat((G.reveal.rumors || []).map(function (x) {
+    return { y: G.year, q: x.q, t: x.t, text: x.text, truth: !!x.truth, keep: x.keep || 0, mood: G.rumorMoods[x.id] || '' };
+  }));
   applyYearEnd(G, G.reveal, G.year + 1);
   try {
     var r = await step();
@@ -619,10 +643,13 @@ function renderDone() {
   var v = G.valueHistory.length ? G.valueHistory[G.valueHistory.length - 1] : 0;
   var saver = G.saverHistory.length ? G.saverHistory[G.saverHistory.length - 1] : 0;
   var dca = G.dcaHistory.length ? G.dcaHistory[G.dcaHistory.length - 1] : 0;
-  var contributed = PAYCHECK_Q * 4 * 15;
-  var feelTl = G.emotions.map(function (e, i) { return e ? '<span class="lr-feelchip">Y' + (i + 1) + ': ' + e + '</span>' : ''; }).join('');
-  var INFLATION = 0.03, inflTarget = 0, annual = PAYCHECK_Q * 4;
-  for (var iy = 1; iy <= 15; iy++) inflTarget += annual * Math.pow(1 + INFLATION, 15 - iy);
+  var contributed = TUT_PAY * 4 * PRACTICE_YEARS + PAYCHECK_Q * 4 * SERVER_YEARS;
+  var feelTl = G.emotions.map(function (e, i) { return e ? '<span class="lr-feelchip">Y' + (i + 1 + PRACTICE_YEARS) + ': ' + e + '</span>' : ''; }).join('');
+  var INFLATION = 0.03, inflTarget = 0;
+  for (var iy = 1; iy <= TOTAL_YEARS; iy++) {
+    var annual = (iy <= PRACTICE_YEARS ? TUT_PAY : PAYCHECK_Q) * 4;
+    inflTarget += annual * Math.pow(1 + INFLATION, TOTAL_YEARS - iy);
+  }
   inflTarget = round2(inflTarget);
   var lesson;
   if (v > dca) {
@@ -641,9 +668,9 @@ function renderDone() {
   }
   var feelCap = 'Your gut feeling each year \u2014 set it against the climb above. The market\u2019s mood and yours rarely lined up.';
   return '<div class="lr-card">' +
-    '<div class="lr-year">15 years later</div>' +
+    '<div class="lr-year">25 years later</div>' +
     '<h2>You ended with ' + money(v) + '</h2>' +
-    '<p class="lr-muted">You contributed ' + money(contributed) + ' of your own money over 15 years.</p>' +
+    '<p class="lr-muted">You put in ' + money(contributed) + ' of your own money over 25 years: ' + money(TUT_PAY * 4 * PRACTICE_YEARS) + ' in practice, then ' + money(PAYCHECK_Q * 4 * SERVER_YEARS) + ' in the market. The comparisons below start from your practice portfolio in Year 6.</p>' +
     '<table class="lr-final">' +
       '<tr><td><span class="lr-muted">Just to keep pace with inflation (\u22483%/yr)</span></td><td><span class="lr-muted">' + money(inflTarget) + '</span></td></tr>' +
       '<tr><td>If you\'d left it all in savings</td><td>' + money(saver) + '</td></tr>' +
@@ -654,32 +681,123 @@ function renderDone() {
     '<p class="lr-lesson">' + lesson + '</p>' +
     '<p class="lr-muted" style="font-size:13px">' + inflNote + '</p>' +
     (feelTl ? '<div class="lr-feeltl"><h4>How the years felt</h4><p class="lr-muted" style="margin:2px 0 8px;font-size:13px">' + feelCap + '</p>' + feelTl + '</div>' : '') +
+    '<button class="lr-advance" onclick="openReport()">Print my report for the packet \u2192</button>' +
     '</div>';
 }
 
 // ─── News + rumors ───────────────────────────────────────────────────────────
-function newsBlock(news) {
-  if (!news) return '';
-  var items = TICKERS.filter(function (t) { return news[t]; }).map(function (t) {
-    return '<div class="lr-news" onclick="showArticle(\'' + t + '\')"><b style="color:' + STOCKS[t].color + '">' + t + '</b> ' + esc(news[t].headline) + '</div>';
+var SIZE_LABEL = { small: 'a little', solid: 'solidly', big: 'a lot' };
+function saidTag(said) {
+  if (!said) return '';
+  var up = said.dir > 0;
+  return '<span class="lr-said ' + (up ? 'lr-up' : 'lr-down') + '">' + (up ? '\u25B2 up ' : '\u25BC down ') + SIZE_LABEL[said.size] + '</span>';
+}
+// Start-of-year forecasts. Same for the whole class. Often wrong on size; in wild years
+// some get the direction wrong too. (open=true: the year-open screen's inline panel.)
+function forecastBlock(news, open) {
+  if (!news || !news.length) return '';
+  var items = news.map(function (n) {
+    return '<div class="lr-news" onclick="showArticle(\'' + n.t + '\')"><b style="color:' + STOCKS[n.t].color + '">' + n.t + '</b> ' +
+      esc(n.headline) + ' ' + saidTag(n.said) + '</div>';
   }).join('');
-  return items ? '<div class="lr-newswire"><h4>The wire</h4>' + items + '</div>' : '';
+  return '<div class="lr-newswire"><h4>' + (open ? 'This year\'s forecasts' : 'The forecasts') + '</h4>' + items +
+    (open ? '<p class="lr-muted" style="font-size:13px;margin:4px 0 0">Forecasts point the right way more often than not. How far they say it\'ll go is often wrong, and when the market gets wild, some point the wrong way.</p>' : '') +
+    '</div>';
 }
 function showArticle(t) {
-  var n = G.reveal.news[t]; if (!n) return;
+  var n = (G.reveal.news || []).filter(function (x) { return x.t === t; })[0]; if (!n) return;
   var m = document.createElement('div'); m.className = 'lr-modal-backdrop';
   m.innerHTML = '<div class="lr-modal"><button class="lr-modal-x" aria-label="Close">&times;</button>' +
-    '<div class="lr-modal-tag" style="color:' + STOCKS[t].color + '">' + t + ' · ' + STOCKS[t].name + '</div>' +
-    '<h3>' + esc(n.headline) + '</h3><p>' + esc(n.article) + '</p></div>';
+    '<div class="lr-modal-tag" style="color:' + STOCKS[t].color + '">' + t + ' · ' + STOCKS[t].name + ' · forecast</div>' +
+    '<h3>' + esc(n.headline) + '</h3><p>' + esc(n.article) + '</p><p style="margin-top:10px">' + saidTag(n.said) + '</p></div>';
   m.addEventListener('click', function (e) { if (e.target === m || e.target.className === 'lr-modal-x') m.remove(); });
   document.body.appendChild(m);
 }
+function verdictTag(r) {
+  if (r.truth === undefined) return '<span class="lr-rumor-src">UNVERIFIED</span>';
+  return r.truth ? '<span class="lr-true">TRUE</span>' : '<span class="lr-false">FALSE</span>';
+}
+// One tabloid look for every rumor: masthead, shouty headline, source, and (once known) a stamp.
+function tabloidCard(text, src, opts) {
+  opts = opts || {};
+  var stamp = opts.truth === undefined ? '' :
+    '<div class="lr-stamp ' + (opts.truth ? 'lr-stamp-true' : 'lr-stamp-false') + '">' + (opts.truth ? 'CONFIRMED' : 'DEBUNKED') + '</div>';
+  return '<div class="lr-rumor' + (opts.truth === undefined ? '' : ' lr-rumor-done') + '">' +
+    '<div class="lr-rumor-mast"><span>The Street Tattler</span><span>' + (opts.tag || '★ EXCLUSIVE ★') + '</span></div>' +
+    '<div class="lr-rumor-body"><div class="lr-rumor-text">' + esc(text) + '</div>' +
+    (src ? '<div class="lr-rumor-src">— ' + esc(src) + (opts.truth === undefined ? ' <span class="lr-unverified">UNVERIFIED</span>' : '') + '</div>' : '') +
+    (opts.note ? '<div class="lr-rumor-note">' + opts.note + '</div>' : '') +
+    '</div>' + stamp + '</div>';
+}
 function rumorBlock(rumors) {
   if (!rumors || !rumors.length) return '';
-  var cards = rumors.map(function (r) {
-    return '<div class="lr-rumor"><div class="lr-rumor-head">EXCLUSIVE</div><div class="lr-rumor-text">' + esc(r.text) + '</div><div class="lr-rumor-src">— ' + esc(r.source) + ' · UNVERIFIED</div></div>';
+  var cards = rumors.map(function (r) { return tabloidCard(r.text, r.src, { truth: r.truth, tag: 'Q' + (r.q + 1) + ' · EXCLUSIVE' }); }).join('');
+  return '<div class="lr-tabloid">' + cards + '</div>';
+}
+// A rumor that just appeared and hasn't been answered yet.
+function pendingRumor() {
+  if (!G.reveal || !G.reveal.rumors || !/^q[0-3]$/.test(G.phase)) return null;
+  var q = qIndex();
+  return G.reveal.rumors.filter(function (r) { return r.q === q && !G.rumorSeen[r.id]; })[0] || null;
+}
+function rumorModal(r) {
+  var btns = EMOTIONS.map(function (e) { return '<button class="lr-emotion" onclick="answerRumor(\'' + r.id + '\',\'' + e + '\')">' + e + '</button>'; }).join('');
+  return '<div class="lr-modal-backdrop"><div class="lr-modal lr-modal-news">' +
+    '<div class="lr-modal-tag" style="color:#b22222">Breaking \u00B7 Year ' + gameYear() + ', Quarter ' + (r.q + 1) + '</div>' +
+    '<div class="lr-tabloid" style="margin:8px 0 14px">' + tabloidCard(r.text, r.src, {}) + '</div>' +
+    '<p>' + STOCKS[r.t].name + ' is already moving on it. You\'ll find out next quarter whether it\'s true.</p>' +
+    '<div class="lr-feel"><h4>Before you do anything: how does this make you feel?</h4><div class="lr-emotions">' + btns + '</div></div>' +
+    '</div></div>';
+}
+function answerRumor(id, mood) { G.rumorSeen[id] = 1; G.rumorMoods[id] = mood; render(); }
+// Quarter screen: rumors whose truth just came out.
+function rumorUpdates(r, q) {
+  var out = (r.rumors || []).filter(function (x) { return x.q === q - 1 && x.truth !== undefined; }).map(function (x) {
+    var note = x.truth ? STOCKS[x.t].name + ' keeps part of that move for good.' : 'False. The jump it caused is gone.';
+    return tabloidCard(x.text, x.src, { truth: x.truth, tag: 'Rumor update', note: note });
   }).join('');
-  return '<div class="lr-tabloid"><h4>The Street Tattler</h4>' + cards + '</div>';
+  return out ? '<div class="lr-tabloid lr-rumorupdates">' + out + '</div>' : '';
+}
+// Year end: the forecasts vs. this student's actual market.
+function forecastCheck(r) {
+  if (!r.news || !r.news.length) return '';
+  var rows = r.news.map(function (n) {
+    var prev = (G.hist[n.t] && G.hist[n.t].length) ? G.hist[n.t][G.hist[n.t].length - 1] : STARTING_PRICES[n.t];
+    var m = r.prices[n.t][3] / prev - 1, a = Math.abs(m);
+    var actSize = a < 0.05 ? 'small' : a < 0.15 ? 'solid' : 'big';
+    var dirOk = (m >= 0 ? 1 : -1) === n.said.dir, sizeOk = dirOk && actSize === n.said.size;
+    var kind = !dirOk ? 'busted' : sizeOk ? 'right' : 'size';
+    var verdict = kind === 'busted' ? '<span class="lr-false">wrong way</span>' : kind === 'right' ? '<span class="lr-true">right</span>' : '<span class="lr-said">right way, wrong size</span>';
+    // why it missed (same for the class); if a true rumor moved this student's company, say so instead
+    var note = '';
+    if (n.miss && kind !== n.miss && rumorMovedIt(n.t)) note = 'Your ' + STOCKS[n.t].name + ' moved differently from the class market: a true rumor changed it.';
+    else if (n.why && kind !== 'right') note = (n.miss === 'busted' ? '<b>What really happened:</b> ' : '<b>Why it missed:</b> ') + esc(n.why);
+    return '<tr' + (note ? ' class="lr-has-note"' : '') + '><td><b style="color:' + STOCKS[n.t].color + '">' + n.t + '</b></td><td>' + saidTag(n.said) + '</td><td class="lr-mono">' + (m >= 0 ? '+' : '−') + Math.round(a * 100) + '%</td><td>' + verdict + '</td></tr>' +
+      (note ? '<tr class="lr-fc-note"><td></td><td colspan="3">' + (n.miss === 'busted' && kind === 'busted' ? '<span class="lr-dim">“' + esc(n.headline) + '”</span> ' : '') + note + '</td></tr>' : '');
+  }).join('');
+  return '<div class="lr-truths"><h4>The forecasts vs. your market</h4><table><thead><tr><th></th><th>Forecast said</th><th>Yours did</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+function rumorMovedIt(t) {                 // a true rumor about t has reached this student (any year so far)
+  var seen = (G.rumorLog || []).concat(((G.reveal && G.reveal.rumors) || []).map(function (x) { return { t: x.t, truth: x.truth }; }));
+  return seen.some(function (x) { return x.t === t && x.truth; });
+}
+function rumorResults(r) {
+  if (!r.rumors || !r.rumors.length) return '<div class="lr-truths"><h4>Rumors this year</h4><p class="lr-muted">None reached you this year.</p></div>';
+  var rows = r.rumors.map(function (x) {
+    var effect = x.truth ? 'kept ' + (x.keep > 0 ? '+' : '') + x.keep + '% for good' : 'faded';
+    return '<tr><td>Q' + (x.q + 1) + '</td><td>' + esc(x.text) + '</td><td>' + verdictTag(x) + '</td><td class="lr-dim">' + effect + '</td><td class="lr-dim">' + esc(G.rumorMoods[x.id] || '') + '</td></tr>';
+  }).join('');
+  return '<div class="lr-truths"><h4>Rumors this year</h4><table><thead><tr><th></th><th></th><th></th><th>Effect</th><th>You felt</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+function storiesBlock(r) {
+  if (!r.stories || !r.stories.length) return '';
+  var items = r.stories.map(function (s) {
+    return '<div class="lr-story"><b style="color:' + STOCKS[s.t].color + '">' + s.t + '</b> ' + esc(s.headline) + '<div class="lr-dim" style="font-size:13px">' + esc(s.article) + '</div></div>';
+  }).join('');
+  return '<div class="lr-newswire"><h4>What actually happened</h4>' + items + '</div>';
+}
+function longRunCard() {
+  return '<div class="lr-recap lr-recap-rule"><h4>The quiet years are over</h4><p>From here the market gets louder: bigger swings, more rumors, and forecasts you can trust less. Everyone in class is playing the same market, but the rumors that reach you are your own. A rare true one changes your market for good.</p></div>';
 }
 
 // ─── Teacher panel ─────────────────────────────────────────────────────────────
@@ -713,9 +831,10 @@ function dashboardTable(students) {
       if (st.valueHistory && st.valueHistory.length) v = money(st.valueHistory[st.valueHistory.length - 1]);
       if (st.emotions && st.emotions.length) feels = st.emotions.map(function (e) { return e ? e.slice(0, 3) : '·'; }).join(' ');
     } catch (e) {}
-    return '<tr><td>' + esc(s.email) + '</td><td>Year ' + (Number(s.year) + 1) + '</td><td>' + esc(s.phase) +
+    return '<tr><td>' + esc(s.email) + '</td><td>Year ' + (Number(s.year) + 1 + PRACTICE_YEARS) + '</td><td>' + esc(s.phase) +
       '</td><td>' + v + '</td><td class="lr-feeltrail">' + esc(feels) + '</td>' +
-      '<td>' + (nRef ? '<button onclick="showReflections(\'' + jsArg(s.email) + '\')">Read ' + nRef + '</button>' : '<span class="lr-dim">—</span>') + '</td>' +
+      '<td>' + (nRef ? '<button onclick="showReflections(\'' + jsArg(s.email) + '\')">Read ' + nRef + '</button>' : '<span class="lr-dim">—</span>') +
+      ' <button onclick="openReportFor(\'' + jsArg(s.email) + '\',' + (Number(s.year) || 0) + ',\'' + jsArg(s.phase) + '\')">Report</button></td>' +
       '<td>' + fmtDate(s.updatedAt) +
       '</td><td><button onclick="resetStudent(\'' + jsArg(s.email) + '\')">Reset</button></td></tr>';
   }).join('');
@@ -731,9 +850,9 @@ function showReflections(email) {
   var items = '';
   for (var i = 0; i < Math.max(refl.length, emo.length); i++) {
     if (!refl[i] && !emo[i]) continue;
-    items += '<div class="lr-recap"><h4>Year ' + (i + 1) + (emo[i] ? ' &middot; felt ' + esc(emo[i]) : '') + '</h4><p>' + (refl[i] ? esc(refl[i]) : '<span class="lr-dim">(no written reflection)</span>') + '</p></div>';
+    items += '<div class="lr-recap"><h4>Year ' + (i + 1 + PRACTICE_YEARS) + (emo[i] ? ' &middot; felt ' + esc(emo[i]) : '') + '</h4><p>' + (refl[i] ? esc(refl[i]) : '<span class="lr-dim">(no written reflection)</span>') + '</p></div>';
   }
-  var tut = st.tutorial ? '<p class="lr-muted">Practice round: finished at ' + money(st.tutorial.endValue) + '; at the ShopRight spring bump they chose to <b>' + esc(st.tutorial.y5) + '</b>.</p>' : '';
+  var tut = st.practice ? '<p class="lr-muted">Practice round: finished at ' + money(st.practice.endValue) + '; at the ShopRight spring bump they chose to <b>' + esc(st.practice.y5) + '</b>.</p>' : '';
   var m = document.createElement('div'); m.className = 'lr-modal-backdrop';
   m.innerHTML = '<div class="lr-modal lr-modal-news"><button class="lr-modal-x" aria-label="Close">&times;</button>' +
     '<div class="lr-modal-tag" style="color:var(--blue)">' + esc(email) + '</div><h3>Reflections</h3>' + tut + (items || '<p class="lr-muted">None yet.</p>') + '</div>';
@@ -749,6 +868,59 @@ async function resetMyGame() {
   TP = null;
   try { var res = await Server.resetMe(); if (res && res.ok) { applyBoot(res.boot); render(); } else showError((res && res.error) || 'Reset failed.'); }
   catch (e) { showError(String(e)); }
+}
+
+// ─── Summary report (printable; attaches to the packet) ───────────────────────
+function openReport() { G.showReport = true; window.scrollTo && window.scrollTo(0, 0); render(); }
+function openReportFor(email, year, phase) { G.showReport = { email: email, year: year, phase: phase }; render(); }
+function closeReport() { G.showReport = false; render(); }
+function renderReportView() {
+  var who = G.showReport === true ? { st: G, year: G.year, phase: G.phase, email: ((window.LONGRUN_BOOT || {}).email || '') }
+                                  : { st: DASH[G.showReport.email] || {}, year: G.showReport.year, phase: G.showReport.phase, email: G.showReport.email };
+  return '<div class="lr-noprint lr-reportbar"><button onclick="closeReport()">← Back</button>' +
+    '<button class="lr-pulse" onclick="window.print()">🖨 Print</button></div>' + reportHtml(who.st, who.year, who.phase, who.email);
+}
+function reportHtml(st, serverYear, phase, email) {
+  var vh = st.valueHistory || [], sh = st.saverHistory || [], dh = st.dcaHistory || [];
+  var emo = st.emotions || [], refl = st.reflections || [], pr = st.practice;
+  var finished = phase === 'done';
+  var reached = finished ? 'Finished all ' + TOTAL_YEARS + ' years' : (pr || vh.length ? 'Working on Year ' + (serverYear + 1 + PRACTICE_YEARS) + ' of ' + TOTAL_YEARS : 'Still in the practice round');
+  var h = '<div class="lr-report">' +
+    '<h1>The Long Run — my report</h1>' +
+    '<p class="lr-rep-name">Name: <span></span></p>' +
+    '<p class="lr-rep-meta">' + esc(email) + ' · printed ' + new Date().toLocaleDateString() + ' · ' + reached + '</p>';
+  // practice
+  h += '<h2>Practice round (Years 1–5)</h2>';
+  if (pr) {
+    h += '<p>Ended practice with <b>' + money2(pr.endValue) + '</b> from ' + money(TUT_PAY * 4 * PRACTICE_YEARS) + ' put in. At ShopRight\'s spring bump I chose to <b>' + esc(pr.y5) + '</b>.</p><table class="lr-rep-tbl"><tr><th>Practice year</th><th>Felt</th><th>What I wrote</th></tr>';
+    for (var y = 0; y < 5; y++) h += '<tr><td>' + (y + 1) + ' · ' + TUT_STOCKS[y] + '</td><td>' + esc((pr.moods || {})['y' + y] || '') + '</td><td>' + esc(((pr.recaps || {})[y] || {}).text || '') + '</td></tr>';
+    h += '</table>';
+  } else h += '<p class="lr-rep-empty">Not finished yet.</p>';
+  h += '<h3>The five rules I took from practice</h3><ol><li>Did the business change, or just the headline?</li><li>Steady income is worth keeping; boring can be good.</li><li>Already spiked + everyone excited = you\'re probably late.</li><li>A rumor isn\'t a fact. Wait for confirmation.</li><li>Know the normal rhythm; don\'t flinch at the expected.</li></ol>';
+  // the real market, year by year
+  h += '<h2>The market (Years 6–25)</h2>';
+  if (vh.length) {
+    h += '<table class="lr-rep-tbl"><tr><th>Year</th><th>Ended with</th><th>Just saving</th><th>Steady index</th><th>Felt</th><th>What I wrote</th></tr>';
+    for (var i = 0; i < vh.length; i++) {
+      h += (i === QUIET_YEARS ? '<tr class="lr-rep-break"><td colspan="6">The long run begins</td></tr>' : '') +
+        '<tr><td>' + (i + 1 + PRACTICE_YEARS) + '</td><td>' + money(vh[i]) + '</td><td>' + money(sh[i] || 0) + '</td><td>' + money(dh[i] || 0) + '</td><td>' + esc(emo[i] || '') + '</td><td>' + esc(refl[i] || '') + '</td></tr>';
+    }
+    h += '</table>';
+    var last = vh.length - 1, gap = vh[last] - (sh[last] || 0);
+    h += '<p>' + (finished ? 'Final result: ' : 'So far: ') + '<b>' + money(vh[last]) + '</b>. That\'s ' + money(Math.abs(gap)) + (gap >= 0 ? ' ahead of' : ' behind') + ' just saving, and ' +
+      money(Math.abs(vh[last] - (dh[last] || 0))) + (vh[last] >= (dh[last] || 0) ? ' ahead of' : ' behind') + ' steadily buying the index.</p>';
+  } else h += '<p class="lr-rep-empty">No market years finished yet.</p>';
+  // rumors
+  var rl = st.rumorLog || [];
+  h += '<div class="lr-rep-keep"><h2>Rumors that reached me</h2>';
+  if (rl.length) {
+    var nt = rl.filter(function (r) { return r.truth; }).length;
+    h += '<p>' + rl.length + ' rumors: ' + nt + ' true, ' + (rl.length - nt) + ' false.</p><table class="lr-rep-tbl"><tr><th>Year</th><th>Rumor</th><th>Truth</th><th>I felt</th></tr>';
+    rl.forEach(function (r) { h += '<tr><td>' + (r.y + 1 + PRACTICE_YEARS) + ' Q' + (r.q + 1) + '</td><td>' + esc(r.text) + '</td><td>' + (r.truth ? 'TRUE' : 'FALSE') + '</td><td>' + esc(r.mood) + '</td></tr>'; });
+    h += '</table>';
+  } else h += '<p class="lr-rep-empty">None yet.</p>';
+  h += '</div>';
+  return h + '</div>';
 }
 
 // ─── tiny inline charts ─────────────────────────────────────────────────────
@@ -935,10 +1107,20 @@ var TUT_STEPS = (function () {
 })();
 
 // ── progress (this browser only) ──
-function tutKey() { var b = (typeof window !== 'undefined' && window.LONGRUN_BOOT) || {}; return 'lr-tut:' + (b.email || 'anon'); }
+function tutKey() { var b = (typeof window !== 'undefined' && window.LONGRUN_BOOT) || {}; return 'lr-tut3:' + (b.email || 'anon'); }
 function tutLoad() {
-  try { var v = JSON.parse(localStorage.getItem(tutKey()) || 'null'); if (v && typeof v.i === 'number') return v; } catch (e) {}
-  return { i: 0, choice: null, done: false };
+  var v = null, srv = (G && G.tp && typeof G.tp.i === 'number') ? G.tp : null;
+  try { v = JSON.parse(localStorage.getItem(tutKey()) || 'null'); } catch (e) {}
+  if (!(v && typeof v.i === 'number')) v = null;
+  if (srv && (!v || srv.i > v.i)) v = JSON.parse(JSON.stringify(srv));   // further along on another computer
+  return v || { i: 0, choice: null, done: false, moods: {}, recaps: {} };
+}
+// Checkpoint to the server at the end of each practice year (fire and forget:
+// this browser's copy is the fallback). Lets a student switch computers.
+function tutCheckpoint() {
+  if (!Server.available || !Server.savePractice) return;
+  G.tp = TP.done ? null : TP;
+  try { Server.savePractice(serialize()).catch(function () {}); } catch (e) {}
 }
 function tutSave(P) { try { localStorage.setItem(tutKey(), JSON.stringify(P)); } catch (e) {} }
 var TP = null;   // { i, choice, done }
@@ -947,15 +1129,15 @@ function tutorialPending() {
   if (!G || G.phase !== 'choose' || G.year !== 0 || G.tutorialDone) return false;
   if (G.lastCreditedQ >= 0 || (G.valueHistory && G.valueHistory.length)) return false;   // already playing
   if (!TP) TP = tutLoad();
-  if (TP.done) { G.tutorialDone = true; G.tutorial = TP.result || null; return false; }   // finished in this browser; not yet saved by an Advance
+  if (TP.done) { applyCarry(TP.result); return false; }   // finished in this browser; not yet saved by an Advance
   return true;
 }
 
 // ── replay the script up to step i -> the practice portfolio ──
 function tutState(i, choice) {
-  var T = { hys: 0, lots: {}, put: 0, lastDiv: 0, lastDivBy: {}, divYear: {}, y1sold: 0, y5sold: 0, y5choice: choice,
+  var T = { hys: 0, lots: {}, cost: {}, put: 0, lastDiv: 0, lastDivBy: {}, divYear: {}, y1sold: 0, y5sold: 0, y5choice: choice,
             sh: function (t) { return T.lots[t] || 0; } };
-  TUT_STOCKS.forEach(function (t) { T.lots[t] = 0; });
+  TUT_STOCKS.forEach(function (t) { T.lots[t] = 0; T.cost[t] = 0; });
   for (var k = 1; k <= i && k < TUT_STEPS.length; k++) {
     var s = TUT_STEPS[k];
     if (s.k === 'q') {                                  // entering a quarter: paycheck + dividends
@@ -965,9 +1147,9 @@ function tutState(i, choice) {
     } else if (s.k === 'after') {                       // the action taken on the quarter before it
       var a = TUT_Q[s.y][s.q].act, tk = TUT_STOCKS[s.y], px = TUT_PRICES[s.y][s.q][tk];
       if (a === 'choice') a = (choice === 'sell') ? { sell: 1 } : null;
-      if (a && a.buy) { var spend = Math.min(a.buy, T.hys); T.lots[tk] += spend / px; T.hys -= spend; }
+      if (a && a.buy) { var spend = Math.min(a.buy, T.hys); T.lots[tk] += spend / px; T.hys -= spend; T.cost[tk] += spend; }
       if (a && a.sell) {
-        var got = T.lots[tk] * px; T.hys += got; T.lots[tk] = 0;
+        var got = T.lots[tk] * px; T.hys += got; T.lots[tk] = 0; T.cost[tk] = 0;
         if (s.y === 0) T.y1sold = got;
         if (s.y === 4) T.y5sold = got;
       }
@@ -983,7 +1165,12 @@ function tutHistory(t, y, q) {      // every practice quarter so far, for the li
 }
 
 // ── actions ──
-function tutNext() { TP.i = Math.min(TP.i + 1, TUT_STEPS.length - 1); tutSave(TP); window.scrollTo && window.scrollTo(0, 0); render(); }
+function tutNext() {
+  var leaving = TUT_STEPS[TP.i];
+  TP.i = Math.min(TP.i + 1, TUT_STEPS.length - 1); tutSave(TP);
+  if (leaving && leaving.k === 'recap') tutCheckpoint();
+  window.scrollTo && window.scrollTo(0, 0); render();
+}
 function tutAct(kind) {
   var s = TUT_STEPS[TP.i]; if (!s || s.k !== 'q') return;
   var a = TUT_Q[s.y][s.q].act; if (!a) return;
@@ -992,15 +1179,34 @@ function tutAct(kind) {
   TP.i += 1; tutSave(TP); render();
 }
 function tutFinish() {
-  var T = tutState(TUT_STEPS.length - 1, TP.choice);
-  TP.result = { endValue: round2(tutValue(T, 4, 3)), y5: TP.choice || 'hold' };
+  var T = tutState(TUT_STEPS.length - 1, TP.choice), lots = {};
+  TUT_STOCKS.forEach(function (t) { if (T.lots[t] > 1e-9) lots[t] = { sh: T.lots[t], px: T.cost[t] / T.lots[t] }; });
+  TP.result = {
+    endValue: round2(tutValue(T, 4, 3)), hys: round2(T.hys), lots: lots, y5: TP.choice || 'hold',
+    moods: TP.moods || {}, recaps: TP.recaps || {}
+  };
   TP.done = true; tutSave(TP);
-  G.tutorialDone = true;
-  G.tutorial = TP.result;
+  applyCarry(TP.result);
+  tutCheckpoint();
   window.scrollTo && window.scrollTo(0, 0);
   render();
 }
-function tutSkip() { if (G.isTeacher) tutFinish(); }      // teacher testing only
+// The practice portfolio becomes the Year 6 portfolio; the comparison lines start from it too.
+function applyCarry(res) {
+  G.tutorialDone = true; G.tp = null;
+  if (!res) return;
+  G.practice = res;
+  G.tutorial = { endValue: res.endValue, y5: res.y5 };
+  if (G.lastCreditedQ >= 0 || (G.valueHistory && G.valueHistory.length)) return;   // never twice
+  G.hys = res.hys;
+  G.lots = emptyLots();
+  for (var t in res.lots) G.lots[t] = [{ sh: res.lots[t].sh, px: res.lots[t].px, yr: 0 }];
+  G.startStake = res.endValue;
+  G.saverHys = res.endValue;                    // "if you'd just saved": the same stake, in savings
+  G.dcaUnits = res.endValue / 100;              // "if you'd steadily indexed": the same stake, in the index (100 at Year 6)
+  G.dcaDivCash = 0;
+}
+function tutSkip() { if (G.isTeacher) { TP.i = TUT_STEPS.length - 1; tutFinish(); } }      // teacher testing only
 
 // ── rendering ──
 function tutChrome(y, T, label) {
@@ -1039,8 +1245,11 @@ function tutCard(t, y, q, T, step) {
 }
 function tutNewsItem(y, q) {
   var Q = TUT_Q[y][q], t = TUT_STOCKS[y];
-  if (Q.rumor) return '<div class="lr-tabloid"><div class="lr-rumor"><div class="lr-rumor-head">EXCLUSIVE</div><div class="lr-rumor-text">' + Q.rumor + '</div><div class="lr-rumor-src">&mdash; ' + Q.src + ' &middot; UNVERIFIED</div></div></div>';
-  if (Q.verdict) return '<div class="lr-truths"><table><tr><td>' + Q.verdict + '</td><td class="lr-false">FALSE</td></tr></table></div>';
+  if (Q.rumor) return '<div class="lr-tabloid">' + tabloidCard(Q.rumor, Q.src, {}) + '</div>';
+  if (Q.verdict) {
+    var orig = TUT_Q[y].slice(0, q).filter(function (x) { return x.rumor; }).pop();
+    return '<div class="lr-tabloid">' + tabloidCard(orig ? orig.rumor : 'RUMOR', orig ? orig.src : '', { truth: false, tag: 'Rumor update', note: Q.verdict }) + '</div>';
+  }
   return '<div class="lr-newswire"><div class="lr-news" style="cursor:default"><b style="color:' + STOCKS[t].color + '">' + t + '</b> ' + Q.head + '</div></div>';
 }
 function tutQuarter(step) {
@@ -1048,7 +1257,8 @@ function tutQuarter(step) {
   var after = (step.k === 'after');
   var coach = after ? Q.after(T) : (typeof Q.coach === 'function' ? Q.coach(T) : Q.coach);
   var pay = '+' + money(TUT_PAY) + ' paycheck landed in savings' + (T.lastDiv > 0 ? ' &middot; +' + money2(T.lastDiv) + ' in dividends' : '');
-  var canNext = after || !Q.act;
+  var moodKey = 'm' + TP.i, mood = (TP.moods || {})[moodKey];
+  var canNext = (after && !!mood) || !Q.act;
   var nextLabel = q < 3 ? 'Next quarter &rarr;' : 'See how Practice Year ' + (y + 1) + ' went &rarr;';
   var spot = TUT_STOCKS[y];
   var locked = TUT_STOCKS.filter(function (t) { return t !== spot; }).map(function (t) {
@@ -1067,9 +1277,10 @@ function tutQuarter(step) {
       '<div><span class="lr-dim">Net worth</span><strong>' + money2(tutValue(T, y, q)) + '</strong></div>' +
       '<div><span class="lr-dim">You\'ve put in</span><strong>' + money(T.put) + '</strong></div>' +
     '</div>' +
-    '<div class="lr-coach' + (after ? ' lr-coach-after' : '') + '"><span class="lr-coach-tag">' + (after ? 'What just happened' : 'Coach') + '</span><p>' + coach + '</p></div>' +
+    '<div class="lr-coach' + (after ? ' lr-coach-after' : '') + '"><span class="lr-coach-tag">' + (after ? 'What just happened' : 'Coach') + '</span><p>' + coach + '</p>' +
+      (after ? tutMoodPick(moodKey, 'How do you feel about that move?') : '') + '</div>' +
     tutCard(spot, y, q, T, step) +
-    '<button class="lr-advance"' + (canNext ? '' : ' disabled') + ' onclick="tutNext()">' + (canNext ? nextLabel : (Q.act === 'choice' ? '&uarr; Make your call first' : '&uarr; Do what the coach says first')) + '</button>' +
+    '<button class="lr-advance"' + (canNext ? '' : ' disabled') + ' onclick="tutNext()">' + (canNext ? nextLabel : (after ? '&uarr; Tap how you feel first' : Q.act === 'choice' ? '&uarr; Make your call first' : '&uarr; Do what the coach says first')) + '</button>' +
     '<div class="lr-lockedlist"><h4>Your other companies &middot; locked until their year</h4>' + locked + '</div>' +
     '</div>';
 }
@@ -1129,15 +1340,45 @@ function tutRecapContent(y, T) {
     rule: '<b>Know the normal rhythm of what you own.</b> Stores have seasons. Energy swings. Banks pay dividends. Healthcare is steady. A move you could have predicted from the calendar isn\'t news.'
   };
 }
+var TUT_REFLECT = [
+  'In your own words: why did selling MedCo on a scary headline cost you money?',
+  'Why might a "boring" company that pays you be worth keeping?',
+  'What would you check before buying a stock everyone is talking about?',
+  'How can you tell a rumor from real news?',
+  'What did you decide at ShopRight\'s spring bump, and why?'
+];
+function tutMoodPick(key, question) {
+  var sel = (TP.moods || {})[key] || '';
+  return '<div class="lr-feel" style="margin:10px 0 2px"><h4>' + question + '</h4><div class="lr-emotions">' +
+    EMOTIONS.map(function (e) { return '<button class="lr-emotion' + (sel === e ? ' lr-emotion-on' : '') + '" onclick="tutMood(\'' + key + '\',\'' + e + '\')">' + e + '</button>'; }).join('') +
+    '</div></div>';
+}
+function tutMood(key, e) { TP.moods = TP.moods || {}; TP.moods[key] = e; tutSave(TP); render(); }
+function tutRecapReady(y) { var r = (TP.recaps || {})[y] || {}; return !!(TP.moods || {})['y' + y] && wordCount(r.text) >= REFLECT_MIN; }
+function tutReflectInput(el, y) {             // no re-render while typing
+  TP.recaps = TP.recaps || {}; TP.recaps[y] = { text: el.value }; tutSave(TP);
+  var c = document.getElementById('lr-reflect-count'); if (c) c.innerHTML = reflectCount(el.value);
+  var b = document.getElementById('lr-tut-gate'); if (b) b.outerHTML = tutRecapGate(y);
+}
+function tutRecapGate(y) {
+  var ok = tutRecapReady(y);
+  return '<button id="lr-tut-gate" class="lr-advance"' + (ok ? '' : ' disabled') + ' onclick="tutNext()">' +
+    (ok ? (y < 4 ? 'On to Practice Year ' + (y + 2) + ' &rarr;' : 'Finish the practice round &rarr;') : '&uarr; Tap how it felt and write a sentence or two') + '</button>';
+}
 function tutRecap(step) {
   var y = step.y, T = tutState(TP.i, TP.choice), R = tutRecapContent(y, T);
+  var txt = ((TP.recaps || {})[y] || {}).text || '';
   return tutChrome(y, T, { q: 3, text: 'Year recap' }) +
     '<div class="lr-card">' +
     '<div class="lr-year">Practice Year ' + (y + 1) + ' recap</div><h2>' + R.name + '</h2>' +
     '<div class="lr-recap"><h4>What happened</h4><p>' + R.what + '</p></div>' +
     '<div class="lr-recap"><h4>' + (y === 1 || (y === 4 && !T.y5sold) ? 'What it paid you' : 'What it cost you') + '</h4><p>' + R.cost + '</p></div>' +
     '<div class="lr-recap lr-recap-rule"><h4>Watch for this in the real game</h4><p>' + R.rule + '</p></div>' +
-    '<button class="lr-advance" onclick="tutNext()">' + (y < 4 ? 'On to Practice Year ' + (y + 2) + ' &rarr;' : 'Finish the practice round &rarr;') + '</button>' +
+    tutMoodPick('y' + y, 'How did Practice Year ' + (y + 1) + ' feel?') +
+    '<div class="lr-reflect"><h4>Reflect \u2014 write it here</h4><p class="lr-prompt">' + esc(TUT_REFLECT[y]) + '</p>' +
+      '<textarea class="lr-reflect-box" rows="3" maxlength="600" placeholder="A sentence or two..." oninput="tutReflectInput(this,' + y + ')">' + esc(txt) + '</textarea>' +
+      '<div class="lr-reflect-count" id="lr-reflect-count">' + reflectCount(txt) + '</div></div>' +
+    tutRecapGate(y) +
     '</div>';
 }
 function tutRender() {
@@ -1145,9 +1386,9 @@ function tutRender() {
   var skip = G.isTeacher ? '<div class="lr-previewbar">Teacher: you can skip the practice round <button onclick="tutSkip()">Skip practice &rarr;</button></div>' : '';
   if (step.k === 'welcome') {
     return skip + '<div class="lr-card"><div class="lr-year">Welcome</div><h2>The Long Run</h2>' +
-      '<p>You\'ll invest a paycheck for <b>15 years</b> and see what your choices add up to. Your game saves every time you press an <b>Advance</b> button, so you can stop and pick up where you left off next time.</p>' +
+      '<p>You\'ll invest a paycheck for <b>25 years</b> and see what your choices add up to. Your game saves every time you press an <b>Advance</b> button, so you can stop and pick up where you left off next time.</p>' +
       '<p>First, a <b>practice round</b>: five quick years with a $100 paycheck each quarter. The coach tells you exactly what to tap &mdash; including some classic mistakes, on purpose &mdash; then shows you what each one cost and what to watch for.</p>' +
-      '<p class="lr-muted">Practice money stays in practice. The real game starts fresh.</p>' +
+      '<p class="lr-muted">Whatever you build in practice, you keep. It\'s your starting portfolio when the market goes live in Year 6.</p>' +
       '<button class="lr-advance" onclick="tutNext()">Start the practice round &rarr;</button></div>';
   }
   if (step.k === 'intro') {
@@ -1170,22 +1411,23 @@ function tutRender() {
       '<li><b>A rumor isn\'t a fact. Wait for confirmation.</b> (PetroPeak)</li>' +
       '<li><b>Know the normal rhythm; don\'t flinch at the expected.</b> (ShopRight)</li></ol></div>' +
     '<div class="lr-recap"><h4>What changes in the real game</h4><ul class="lr-tut-list">' +
-      '<li>Your paycheck is <b>$1,000 a quarter</b>, for <b>15 years</b>.</li>' +
+      '<li>Your paycheck becomes <b>$1,000 a quarter</b>, for <b>20 more years</b>: 5 quiet ones, then 15 that aren\'t.</li>' +
       '<li>Every company is unlocked, and you can also buy <b>Index 5</b> (a slice of all five companies) or <b>GrowthFund</b>.</li>' +
-      '<li>Nobody tells you what to tap. Every headline and rumor is a test of one of the five rules above.</li></ul></div>' +
-    '<p class="lr-muted">Practice money stays here. The real game starts at $0.</p>' +
-    '<button class="lr-advance" onclick="tutFinish()">Start the real game &rarr;</button></div>';
+      '<li>Nobody tells you what to tap. Each year starts with forecasts, and rumors pop up when you least expect them. Every one is a test of the five rules above.</li></ul></div>' +
+    '<p class="lr-muted">You keep it: your savings and every share you own come with you into Year 6, where the market goes live and your paycheck becomes $1,000 a quarter.</p>' +
+    '<button class="lr-advance" onclick="tutFinish()">On to Year 6: the live market &rarr;</button></div>';
 }
 
 // One-time "how the real game works" panel on the real Year 1 opening screen.
 function realGameGuide() {
-  return '<div class="lr-recap lr-guide"><h4>How the real game works</h4><ul class="lr-tut-list">' +
-    '<li>Every quarter, a <b>$1,000 paycheck</b> lands in savings (HYS). Savings earns interest &mdash; the rate is shown each year.</li>' +
-    '<li>Buy with the <b>+</b> buttons: <b>Index 5</b> (all five companies, pays dividends), <b>GrowthFund</b> (a blend, no dividends), or single stocks. Sell any time.</li>' +
-    '<li><b>&#x1F4F0; News &amp; Rumors</b> (bottom right) has each year\'s headlines. Rumors are unverified.</li>' +
-    '<li>Taxes come out once a year. At each year\'s end, tap how the year felt and write a sentence or two about it.</li>' +
-    '<li>Your game saves each time you press an <b>Advance</b> button. If you leave in the middle of a quarter, you redo that quarter.</li>' +
-    '<li>15 years in all. Stop any time and pick up where you left off.</li></ul></div>';
+  return '<div class="lr-recap lr-guide"><h4>How the live market works</h4><ul class="lr-tut-list">' +
+    '<li>Every quarter, a <b>$1,000 paycheck</b> lands in savings (HYS). Savings earns interest; the rate is shown each year.</li>' +
+    '<li>Buy with the <b>+</b> buttons: <b>Index 5</b> (all five companies, pays dividends), <b>GrowthFund</b> (a blend, no dividends), or single companies. Sell any time.</li>' +
+    '<li>Each year opens with <b>forecasts</b> for every company. They\'re usually right about the direction and often wrong about how far.</li>' +
+    '<li><b>Rumors</b> pop up at random during the year. Most are false; you\'ll learn the truth the next quarter.</li>' +
+    '<li>Years 6\u201310 are the <b>quiet market</b>: calm and steady. Years 11\u201325 get loud.</li>' +
+    '<li>At each year\'s end, tap how the year felt and write a sentence or two. Press <b>\uD83D\uDDA8 Report</b> any time to print your progress for your packet.</li>' +
+    '<li>Your game saves each time you press an <b>Advance</b> button. If you leave mid-quarter, you redo that quarter.</li></ul></div>';
 }
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
