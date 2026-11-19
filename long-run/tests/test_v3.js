@@ -9,6 +9,10 @@ let pass = 0, fail = 0;
 function ok(cond, msg) { if (cond) { pass++; console.log('  ok   ' + msg); } else { fail++; console.log('  FAIL ' + msg); } }
 const near = (a, b, tol) => Math.abs(a - b) <= (tol == null ? 0.011 : tol);
 const text = (g) => g.text();
+// nothing on screen may announce what kind of market is coming
+const SPOILER = /quiet (market|years|ones)|long run begins|the long run \u00B7|get(s)? lou(d|der)|calm before|years 6\u201310|years 11\u201325/i;
+let spoilers = [];
+function scan(g, where) { const m = (g.doc.body.textContent || '').match(SPOILER); if (m) spoilers.push(where + ': ' + m[0]); }
 async function type(g, sel, s) { const ta = g.doc.querySelector(sel); ta.value = s; ta.dispatchEvent(new g.w.Event('input', { bubbles: true })); await g.settle(3); }
 
 // Walk the practice round with every stop answered. y5: 'hold' | 'sell'.
@@ -36,9 +40,11 @@ async function playPractice(g, y5, probe) {
 
 // One real year. strategy(g, q) runs on each quarter screen. Answers rumors as they pop.
 async function playYear(g, strategy, log) {
+  scan(g, 'Y' + (g.G().year + 6) + ' open');
   if (g.G().phase === 'choose') await g.click(/^Begin Quarter 1/);
   for (let q = 0; q < 4; q++) {
     if (!/^q[0-3]$/.test(g.G().phase)) throw new Error('expected a quarter, got ' + g.G().phase);
+    scan(g, 'Y' + (g.G().year + 6) + ' Q' + (q + 1));
     let guard = 0;
     while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor') && guard++ < 5) {
       if (log) {
@@ -54,6 +60,7 @@ async function playYear(g, strategy, log) {
     await g.click(/^(Advance to Q|Close out the year)/);
   }
   if (g.G().phase !== 'verify') throw new Error('expected verify, got ' + g.G().phase);
+  scan(g, 'Y' + (g.G().year + 6) + ' review');
   if (log) {
     const t = text(g);
     log.verify = log.verify || [];
@@ -77,12 +84,13 @@ async function playYear(g, strategy, log) {
   ok(/25 years/.test(text(g)) && /practice round/i.test(text(g)), 'welcome says 25 years and starts the practice round');
   const probe = {};
   await playPractice(g, 'hold', probe);
+  scan(g, 'practice final');
   ok(probe.afterLocked === true, 'after each forced move, Next stays locked until a feeling is tapped');
   ok(probe.recapLocked === true && probe.recapStillLocked === true, 'each practice recap needs a feeling AND a sentence before moving on');
   ok(/You keep it/.test(text(g)) && /Year 6/.test(text(g)), 'final practice screen: "you keep it", on to Year 6');
   await g.click(/^On to Year 6/);
   const G0 = g.G();
-  ok(/Welcome to the live market/.test(text(g)) && /Start of Year 6/.test(text(g)) && /The quiet market/.test(text(g)), 'Year 6 opens: live market, quiet market label');
+  ok(/Welcome to the live market/.test(text(g)) && /Start of Year 6/.test(text(g)) && /Live market/.test(text(g)), 'Year 6 opens: "Live market", no era name');
   ok(near(G0.startStake, 2265.88, 0.02) && near(G0.hys, 702.86, 0.02), 'carry-over: start stake $2,265.88, savings $702.86 (the practice result)');
   ok(['MED', 'TBK', 'NVT', 'PPK', 'SHP'].every(t => G0.lots[t].length === 1 && G0.lots[t][0].yr === 0), 'every practice holding carried over as a long-term lot');
   ok(near(moneyNum(g.doc.querySelector('.lr-port-val').textContent), 2266, 1), 'header shows the carried portfolio ($2,266)');
@@ -94,10 +102,11 @@ async function playYear(g, strategy, log) {
   console.log('\n[2] 20 market years');
   const log = {};
   for (let y = 0; y < 20; y++) {
-    if (y === 5) ok(/The long run begins/.test(text(g)) && /The quiet years are over/.test(text(g)) && /Start of Year 11/.test(text(g)), 'Year 11 opens with the long-run card');
+    if (y === 5) ok(/Start of Year 11/.test(text(g)) && /Before the market opens/.test(text(g)) && g.doc.querySelectorAll('.lr-seg-break').length === 1, 'Year 11 opens like any other year (no announcement, one gap in the progress bar: after practice)');
     await playYear(g, null, log);
   }
   ok(g.G().phase === 'done' && /25 years later/.test(text(g)), 'finishes at "25 years later"');
+  scan(g, 'final'); g.doc.querySelector('.lr-modal-backdrop') || null;
   ok(/\$82,000/.test(text(g)), 'final screen counts $82,000 put in ($2,000 practice + $80,000 market)');
   ok(log.rumorsSeen > 0 && log.blockedAdvance === log.rumorsSeen, `rumors popped up (${log.rumorsSeen}) and Advance was blocked until each was answered`);
   ok(log.updates > 0, 'rumor updates (true/false) appeared the following quarter (' + log.updates + ')');
@@ -114,6 +123,8 @@ async function playYear(g, strategy, log) {
   console.log('\n[3] report');
   await g.click(/^Print my report/);
   const rep = text(g);
+  scan(g, 'report');
+  ok(spoilers.length === 0, 'no screen names the coming market (quiet/loud/long run): ' + spoilers.slice(0, 3).join(' | '));
   ok(/my report/.test(rep) && /Finished all 25 years/.test(rep) && /v3\.student@excelcenteraz\.org/.test(rep), 'report: title, email, finished');
   ok(/Practice year 1 taught me/.test(rep) && /Year 25: I mostly held/.test(rep), 'report includes practice and market reflections');
   ok(/Rumors that reached me/.test(rep) && /true, \d+ false/.test(rep), 'report lists rumors with true/false counts');

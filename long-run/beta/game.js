@@ -10,7 +10,7 @@
  * HYS / FUND / INDEX / individual stocks, sell anytime. Taxes settle once a year.
  *
  * v3 (Nov 2026): 25 game years = practice 1-5 (scripted, in this file, portfolio carries
- * over) + quiet market 6-10 + the long run 11-25 (server years 0-19). Start-of-year news
+ * over) + the live market 6-25 (server years 0-19). Start-of-year news
  * forecasts, mid-year rumors with a required mood check, year-end news-vs-reality and
  * rumor results, a printable summary report.
  *
@@ -21,8 +21,8 @@
  */
 
 // ─── small engine helpers ────────────────────────────────────────────────────
-function divCut(t, yr) {                       // banks slash in the collapse; retail trims
-  var b = yr - QUIET_YEARS;                    // long-run year (the collapse is long-run years 6-8)
+function divCut(t, yr) {
+  var b = yr - QUIET_YEARS;
   if (b === 6) return t === 'TBK' ? 0.50 : 0.75;
   if (b === 7 || b === 8) return t === 'TBK' ? 0.40 : 0.70;
   return 1.0;
@@ -229,7 +229,6 @@ function headerValue() {
   return valueOf(G, null, 100);
 }
 function gameYear() { return G.phase === 'done' ? TOTAL_YEARS : G.year + 1 + PRACTICE_YEARS; }
-function eraName(serverYear) { return serverYear < QUIET_YEARS ? 'The quiet market' : 'The long run'; }
 function chromeTop() {
   var y = gameYear();
   var done = PRACTICE_YEARS + (G.phase === 'done' ? SERVER_YEARS : (G.year || 0));   // practice always counts as done
@@ -237,12 +236,12 @@ function chromeTop() {
   var segs = '';
   for (var i = 1; i <= TOTAL_YEARS; i++) {
     var cls = i <= done ? 'done' : (i === nowSeg ? 'now' : 'future');
-    var gap = (i === PRACTICE_YEARS + 1 || i === PRACTICE_YEARS + QUIET_YEARS + 1) ? ' lr-seg-break' : '';
+    var gap = (i === PRACTICE_YEARS + 1) ? ' lr-seg-break' : '';          // practice | live market, nothing else
     segs += '<span class="lr-seg lr-seg-' + cls + gap + '"></span>';
   }
   var label = { choose: 'Start of Year', q0: 'Quarters', q1: 'Quarters', q2: 'Quarters',
                 q3: 'Quarters', verify: 'Year in Review', done: 'Final Results' }[G.phase] || '';
-  if (G.phase !== 'done' && label) label = eraName(G.year) + ' \u00B7 ' + label;
+  if (G.phase !== 'done' && label) label = 'Live market \u00B7 ' + label;
   var name = G.playerName ? '<span class="lr-name">' + esc(G.playerName) + '</span>' : '';
   return '<div class="lr-chrome">' +
     '<div class="lr-topbar">' +
@@ -308,18 +307,17 @@ function signInNotice() {
 function renderYearOpen() {
   var y = gameYear(), fed = FED_RATES[G.year];
   var fedNote = fed <= 1 ? ' — cash earns almost nothing.' : fed >= 4 ? ' — savers are being paid well.' : '.';
-  var first = (G.year === 0), longStart = (G.year === QUIET_YEARS);
+  var first = (G.year === 0);
   var intro = first
     ? 'Your practice portfolio came with you: the shares and savings below are yours. From here the market is live, and your paycheck is <strong>' + money(PAYCHECK_Q) + '</strong> a quarter. Read this year\'s forecasts, then get your bearings.'
     : 'These are <strong>last year\'s closing prices</strong>. Sell holdings or put savings to work now, before this year\'s first quarter — or just move on and decide quarter by quarter.';
   var p = soyPrices(), idx = soyIndex();
   var rows = INSTRUMENTS.map(function (inst) { return soyRow(inst, p, idx); }).join('');
   return '<div class="lr-card">' +
-    '<div class="lr-year">Start of Year ' + y + ' \u00B7 ' + eraName(G.year) + '</div>' +
-    '<h2>' + (first ? 'Welcome to the live market' : longStart ? 'The long run begins' : 'Before the market opens') + '</h2>' +
+    '<div class="lr-year">Start of Year ' + y + '</div>' +
+    '<h2>' + (first ? 'Welcome to the live market' : 'Before the market opens') + '</h2>' +
     '<p class="lr-muted">' + intro + '</p>' +
     (first ? realGameGuide() : '') +
-    (longStart ? longRunCard() : '') +
     forecastBlock(G.reveal.news, true) +
     '<div class="lr-fed">High-yield savings pays <strong>' + fed.toFixed(2) + '%</strong> this year' + fedNote + '</div>' +
     '<div class="lr-standing">' +
@@ -472,7 +470,7 @@ function renderVerify() {
       ? '<span class="lr-muted" style="font-family:var(--mono);font-weight:700">= same as just saving</span></div>'
       : '<span class="' + (aheadBy > 0 ? 'lr-true' : 'lr-false') + '" style="font-family:var(--mono);font-weight:700">' + (aheadBy > 0 ? '\u25B2 ahead by ' : '\u25BC behind by ') + money(Math.abs(aheadBy)) + '</span></div>');
   return '<div class="lr-card">' +
-    '<div class="lr-year">Year ' + gameYear() + ' — ' + esc(r.title) + ' \u00B7 ' + eraName(G.year) + '</div>' +
+    '<div class="lr-year">Year ' + gameYear() + ' — ' + esc(r.title) + '</div>' +
     '<div class="lr-gl"><table>' +
       row('Started the year with', money(startV)) +
       row('Your paychecks added', '+' + money(contrib)) +
@@ -606,8 +604,6 @@ function reflectInput(el) {                // no re-render while typing (it woul
 }
 function journalPrompt(r) {
   var idxRet = r.index[3] / soyIndex() - 1;
-  if (G.year === QUIET_YEARS - 1)
-    return 'The quiet market is over. What did five calm years teach you about how you want to invest when things get loud?';
   if (G.year === LAST_SERVER_YEAR)
     return 'Twenty-five years. Which of your habits would you keep if this were your real paycheck, and which would you drop?';
   if (G.yr.realShort < -50 || G.yr.realLong < -50)
@@ -796,9 +792,6 @@ function storiesBlock(r) {
   }).join('');
   return '<div class="lr-newswire"><h4>What actually happened</h4>' + items + '</div>';
 }
-function longRunCard() {
-  return '<div class="lr-recap lr-recap-rule"><h4>The quiet years are over</h4><p>From here the market gets louder: bigger swings, more rumors, and forecasts you can trust less. Everyone in class is playing the same market, but the rumors that reach you are your own. A rare true one changes your market for good.</p></div>';
-}
 
 // ─── Teacher panel ─────────────────────────────────────────────────────────────
 function renderTeacherPanel() {
@@ -910,8 +903,7 @@ function reportHtml(st, serverYear, phase, email) {
   if (vh.length) {
     h += '<table class="lr-rep-tbl"><tr><th>Year</th><th>Ended with</th><th>Just saving</th><th>Steady index</th><th>Felt</th><th>What I wrote</th></tr>';
     for (var i = 0; i < vh.length; i++) {
-      h += (i === QUIET_YEARS ? '<tr class="lr-rep-break"><td colspan="6">The long run begins</td></tr>' : '') +
-        '<tr><td>' + (i + 1 + PRACTICE_YEARS) + '</td><td>' + money(vh[i]) + '</td><td>' + money(sh[i] || 0) + '</td><td>' + money(dh[i] || 0) + '</td><td>' + esc(emo[i] || '') + '</td><td>' + esc(refl[i] || '') + '</td></tr>';
+      h += '<tr><td>' + (i + 1 + PRACTICE_YEARS) + '</td><td>' + money(vh[i]) + '</td><td>' + money(sh[i] || 0) + '</td><td>' + money(dh[i] || 0) + '</td><td>' + esc(emo[i] || '') + '</td><td>' + esc(refl[i] || '') + '</td></tr>';
     }
     h += '</table>';
     var last = vh.length - 1, gap = vh[last] - (sh[last] || 0);
@@ -1419,7 +1411,7 @@ function tutRender() {
       '<li><b>A rumor isn\'t a fact. Wait for confirmation.</b> (PetroPeak)</li>' +
       '<li><b>Know the normal rhythm; don\'t flinch at the expected.</b> (ShopRight)</li></ol></div>' +
     '<div class="lr-recap"><h4>What changes in the real game</h4><ul class="lr-tut-list">' +
-      '<li>Your paycheck becomes <b>$1,000 a quarter</b>, for <b>20 more years</b>: 5 quiet ones, then 15 that aren\'t.</li>' +
+      '<li>Your paycheck becomes <b>$1,000 a quarter</b>, for <b>20 more years</b>.</li>' +
       '<li>Every company is unlocked, and you can also buy <b>Index 5</b> (a slice of all five companies) or <b>GrowthFund</b>.</li>' +
       '<li>Nobody tells you what to tap. Each year starts with forecasts, and rumors pop up when you least expect them. Every one is a test of the five rules above.</li></ul></div>' +
     '<p class="lr-muted">You keep it: your savings and every share you own come with you into Year 6, where the market goes live and your paycheck becomes $1,000 a quarter.</p>' +
@@ -1433,7 +1425,6 @@ function realGameGuide() {
     '<li>Buy with the <b>+</b> buttons: <b>Index 5</b> (all five companies, pays dividends), <b>GrowthFund</b> (a blend, no dividends), or single companies. Sell any time.</li>' +
     '<li>Each year opens with <b>forecasts</b> for every company. They\'re usually right about the direction and often wrong about how far.</li>' +
     '<li><b>Rumors</b> pop up at random during the year. Most are false; you\'ll learn the truth the next quarter.</li>' +
-    '<li>Years 6\u201310 are the <b>quiet market</b>: calm and steady. Years 11\u201325 get loud.</li>' +
     '<li>At each year\'s end, tap how the year felt and write a sentence or two. Press <b>\uD83D\uDDA8 Report</b> any time to print your progress for your packet.</li>' +
     '<li>Your game saves each time you press an <b>Advance</b> button. If you leave mid-quarter, you redo that quarter.</li></ul></div>';
 }
