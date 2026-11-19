@@ -273,7 +273,7 @@ function chromeTop() {
     '<div class="lr-topbar">' +
       '<div class="lr-actions">' + name +
         '<button class="lr-chip" onclick="headerSave(this)">\uD83D\uDCBE Save</button>' +
-        '<button class="lr-chip" onclick="openReport()">\uD83D\uDDA8 Report</button>' +
+        '<button class="lr-chip" onclick="openReport()">\uD83D\uDCC4 Report</button>' +
       '</div>' +
       '<div class="lr-yearpill">Year ' + y + '</div>' +
       '<div class="lr-port"><span class="lr-port-label">Portfolio</span>' +
@@ -716,7 +716,7 @@ function renderDone() {
     '<p class="lr-lesson">' + lesson + '</p>' +
     '<p class="lr-muted" style="font-size:13px">' + inflNote + '</p>' +
     (feelTl ? '<div class="lr-feeltl"><h4>How the years felt</h4><p class="lr-muted" style="margin:2px 0 8px;font-size:13px">' + feelCap + '</p>' + feelTl + '</div>' : '') +
-    '<button class="lr-advance" onclick="openReport()">Print my report for the packet \u2192</button>' +
+    '<button class="lr-advance" onclick="openReport()">See my report \u2192</button>' +
     '</div>';
 }
 
@@ -918,7 +918,8 @@ function renderReportView() {
   var who = G.showReport === true ? { st: G, year: G.year, phase: G.phase, email: ((window.LONGRUN_BOOT || {}).email || '') }
                                   : { st: DASH[G.showReport.email] || {}, year: G.showReport.year, phase: G.showReport.phase, email: G.showReport.email };
   return '<div class="lr-noprint lr-reportbar"><button onclick="closeReport()">← Back</button>' +
-    '<button class="lr-pulse" onclick="window.print()">🖨 Print</button></div>' + reportHtml(who.st, who.year, who.phase, who.email);
+    (G.isTeacher ? '<button class="lr-pulse" onclick="window.print()">🖨 Print</button>' : '<span></span>') + '</div>' +   // students can't print; the teacher prints from the dashboard
+    reportHtml(who.st, who.year, who.phase, who.email);
 }
 function reportHtml(st, serverYear, phase, email) {
   var vh = st.valueHistory || [], sh = st.saverHistory || [], dh = st.dcaHistory || [];
@@ -928,7 +929,7 @@ function reportHtml(st, serverYear, phase, email) {
   var h = '<div class="lr-report">' +
     '<h1>The Long Run — my report</h1>' +
     '<p class="lr-rep-name">Name: <span></span></p>' +
-    '<p class="lr-rep-meta">' + esc(email) + ' · printed ' + new Date().toLocaleDateString() + ' · ' + reached + '</p>';
+    '<p class="lr-rep-meta">' + esc(email) + ' · as of ' + new Date().toLocaleDateString() + ' · ' + reached + '</p>';
   // practice
   h += '<h2>Practice round (Years 1–5)</h2>';
   if (pr) {
@@ -1464,7 +1465,7 @@ function realGameGuide() {
     '<li>Buy with the <b>+</b> buttons: <b>Index 5</b> (all five companies, pays dividends), <b>GrowthFund</b> (a blend, no dividends), or single companies. Sell any time.</li>' +
     '<li>Each year opens with <b>forecasts</b> for every company. They\'re usually right about the direction and often wrong about how far.</li>' +
     '<li><b>Rumors</b> pop up at random during the year. Most are false; you\'ll learn the truth the next quarter.</li>' +
-    '<li>At each year\'s end, tap how the year felt and write a sentence or two. Press <b>\uD83D\uDDA8 Report</b> any time to print your progress for your packet.</li>' +
+    '<li>At each year\'s end, tap how the year felt and write a sentence or two. Press <b>\uD83D\uDCC4 Report</b> any time to see everything you\'ve done so far.</li>' +
     '<li>Your game saves each time you press an <b>Advance</b> button. If you leave mid-quarter, you redo that quarter.</li></ul></div>';
 }
 

@@ -121,8 +121,9 @@ async function playYear(g, strategy, log) {
 
   // ── 3. the report ──────────────────────────────────────────────────────────
   console.log('\n[3] report');
-  await g.click(/^Print my report/);
+  await g.click(/^See my report/);
   const rep = text(g);
+  ok(!g.btn(/Print/) && !/print/i.test(text(g)), 'students see their report with no Print button (they can\'t print in class)');
   scan(g, 'report');
   ok(spoilers.length === 0, 'no screen names the coming market (quiet/loud/long run): ' + spoilers.slice(0, 3).join(' | '));
   ok(/my report/.test(rep) && /Finished all 25 years/.test(rep) && /v3\.student@excelcenteraz\.org/.test(rep), 'report: title, email, finished');
@@ -203,6 +204,7 @@ async function playYear(g, strategy, log) {
   ok(rowOf(/old\.save@/) && /Practice/.test(rowOf(/old\.save@/).textContent), 'dashboard: a student in the practice round shows Practice');
   Array.from(trow.querySelectorAll('button')).find(b => b.textContent === 'Report').click(); await g.settle(5);
   ok(/my report/.test(text(g)) && /v3\.student@excelcenteraz\.org/.test(text(g)) && /Practice year 1 taught me/.test(text(g)), 'teacher can open and print any student\'s report');
+  ok(!!g.btn(/Print/), 'the teacher\'s report view has the Print button');
 
   // ── 8. practice progress follows the student to another computer ────────
   console.log('\n[8] switching computers');
