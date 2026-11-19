@@ -67,7 +67,8 @@ function ok(cond, msg) { if (cond) { pass++; console.log('  ok   ' + msg); } els
   ok(C.doGet().xframe === 'DEFAULT', 'doGet: other sites can no longer frame the game');
   let threw = false; try { C.include('Market'); } catch (e) { threw = true; }
   ok(threw, "include('Market') is refused from the browser");
-  ok(/The Long Run — Game\.html/.test(C.include('Game')), "include('Game') still works (rollback Index.html)");
+  if (!V3) ok(/The Long Run — Game\.html/.test(C.include('Game')), "include('Game') still works (rollback Index.html)");
+  else { let t2 = false; try { C.include('Game'); } catch (e) { t2 = true; } ok(t2, "v3: include() hands out nothing (old partials deleted)"); }
   server.setEmail('saver.bot@excelcenteraz.org');
   const before = JSON.stringify(server.sheets.Saves.rows.find(r => r[0] === 'saver.bot@excelcenteraz.org'));
   ok(C.resetMe().error === 'not authorized' && JSON.stringify(server.sheets.Saves.rows.find(r => r[0] === 'saver.bot@excelcenteraz.org')) === before, "a student calling resetMe() from the console is refused; their save is untouched");

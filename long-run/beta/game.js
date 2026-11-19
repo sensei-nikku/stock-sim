@@ -175,10 +175,36 @@ function applyBoot(boot) {
 // ─── Server loop ───────────────────────────────────────────────────────────────
 var LAST_ERR = '';
 function retryNotice() { showError('Couldn\'t reach the game server (' + LAST_ERR + '). Nothing was lost \u2014 press the button again.'); }
+// ─── Wait screen: every trip to the game server shows it and blocks clicks until it's back ──
+var BUSY_T = null;
+function busyLabel() {
+  var p = G.phase;
+  if (p === 'choose') return 'Opening Quarter 1\u2026';
+  if (p === 'q3') return 'Closing out the year\u2026';
+  if (/^q[0-2]$/.test(p)) return 'Opening Quarter ' + (Number(p.charAt(1)) + 2) + '\u2026';
+  if (p === 'verify') return G.year >= LAST_SERVER_YEAR ? 'Adding up 25 years\u2026' : 'Saving your year\u2026';
+  return 'Saving\u2026';
+}
+function busy(on) {
+  var el = document.getElementById('lr-busy');
+  if (!el) { el = document.createElement('div'); el.id = 'lr-busy'; document.body.appendChild(el); }
+  clearTimeout(BUSY_T);
+  if (!on) { el.className = ''; el.innerHTML = ''; document.body.classList.remove('lr-busy-on'); return; }
+  el.innerHTML = '<div class="lr-busy-bar"></div><div class="lr-busy-msg" role="status"><span class="lr-spin"></span><span id="lr-busy-text">' + busyLabel() + '</span></div>';
+  el.className = 'on'; document.body.classList.add('lr-busy-on');
+  BUSY_T = setTimeout(function () {
+    var t = document.getElementById('lr-busy-text');
+    if (t) t.textContent = 'Still working \u2014 the game server is slow right now. No need to click again.';
+  }, 6000);
+}
+
 async function step(choice) {
-  var res;
+  var res, t0 = Date.now();
+  busy(true);
   try { res = await Server.advance(G.year, G.phase, serialize(), choice); }
-  catch (e) { LAST_ERR = String((e && e.message) || e); showError(LAST_ERR); return 'error'; }
+  catch (e) { busy(false); LAST_ERR = String((e && e.message) || e); showError(LAST_ERR); return 'error'; }
+  busy(false);
+  try { console.log('[Long Run] server round trip: ' + (Date.now() - t0) + ' ms'); } catch (e) {}
   if (res && res.ok === false) {
     if (res.stale) { applyBoot(res.boot); render(); return 'stale'; }
     LAST_ERR = res.error || 'Something went wrong.'; showError(LAST_ERR); return 'error';
@@ -1430,5 +1456,14 @@ function realGameGuide() {
 }
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
-function init() { applyBoot(Server.boot()); render(); }
+var API_VERSION = 3;     // must match Code.gs; a mismatch means the Apps Script files are from another release
+function apiMismatch() {
+  return '<div class="lr-card"><h2>The Long Run</h2><p>The game can\'t start: its server files don\'t match this version of the game.</p>' +
+    '<p class="lr-muted">Teacher: paste the <b>Code.gs</b> and <b>Market.gs</b> that came with this release into Apps Script, save, and deploy a new version.</p></div>';
+}
+function init() {
+  var b = Server.boot();
+  if (b && b.api !== API_VERSION) { document.getElementById('app').innerHTML = apiMismatch(); return; }
+  applyBoot(b); render();
+}
 if (typeof document !== 'undefined') { init(); }

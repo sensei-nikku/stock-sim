@@ -10,7 +10,6 @@ The Long Run runs as a Google Apps Script web app. The Apps Script project holds
 | Apps Script `Code.gs`, `Market.gs` | Login, saves, phase machine (hardened Nov 2026); future prices | Apps Script only — **neither goes in this public repo** |
 | `releases/<id>/` | Frozen builds. Never edited after pinning; a change = a new id | `tools/make_release.py` |
 | `beta/` | Working copy the next release is frozen from. **Nothing loads it.** | Push freely |
-| `live/` | Old unpinned channel for the v1 shell; delete once shell v3 is deployed | — |
 | `fonts/` | OFL licenses for the fonts embedded in `styles.css` | — |
 
 ## Releasing
@@ -26,6 +25,7 @@ The Long Run runs as a Google Apps Script web app. The Apps Script project holds
 ## Releases
 | Id | What |
 |---|---|
+| `2026-11-19-v3.3` | Wait screen on every trip to the server; refuses to run (teacher message) unless Code.gs reports `api: 3`. **Needs the Code.gs that came with it** (no shared lock on advance, row cache, timing in the execution log). |
 | `2026-11-19-v3.2` | Same as v3.1 with no era names on screen (no "quiet market", no "long run begins" card, one progress-bar gap after practice). Pair with Market.gs whose Year 10 title is "More of the Same". |
 | `2026-11-19-v3.1` | Same as v3, plus the teacher dashboard shows Practice / Year N / Finished. |
 | `2026-11-19-v3` | 25 years: 5-year practice (balances carry over) → 5 quiet years → 15-year long run. Start-of-year forecasts, random rumors (Street Tattler), mood + reflection stops, printable report. Needs Code.gs/Market.gs v3. |
@@ -35,7 +35,7 @@ The Long Run runs as a Google Apps Script web app. The Apps Script project holds
 ## Tests
 `NODE_PATH=<jsdom> LR_SRC=<folder with the private Code.gs + Market.gs>`, then:
 `node tests/test_v3.js` (v3 game, `LR_RELEASE=<id>`), `LR_PROFILE=v3 node tests/test_live.js` (shell + server hardening),
-`python3 tests/test_sri_chrome.py <id>` (real Chrome), `node tests/shots_v3.js` + `python3 tests/shots_v3.py` (screenshots).
+`LR_SRC=... python3 tests/test_sri_chrome.py <id>` (real Chrome), `node tests/shots_v3.js` + `python3 tests/shots_v3.py` (screenshots).
 
 The browser refuses any file whose bytes don't match the pinned hash (Subresource Integrity). Fonts are
 inlined in `styles.css`, so its hash covers them; the page fetches nothing else. A push to this repo, or a

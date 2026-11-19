@@ -53,13 +53,14 @@ function makeServer() {
     insertSheet(n) { sheets[n] = makeSheet(n); return sheets[n]; },
     getSpreadsheetTimeZone() { return 'America/Phoenix'; }
   };
-  const props = {}, errorsLogged = [];
+  const props = {}, errorsLogged = [], cache = {};
   const ctx = {
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = v; } }) },
     JSON, Math, Date, String, Number, Object, Array,
     SpreadsheetApp: { getActiveSpreadsheet: () => ss, openById: () => ss },
     Session: { getActiveUser: () => ({ getEmail: () => email }), getScriptTimeZone: () => 'America/Phoenix' },
     LockService: { getUserLock: () => ({ waitLock() {}, releaseLock() {} }), getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = String(v); }, remove: (k) => { delete cache[k]; } }) },
     Utilities: { formatDate: (d) => new Date(d).toISOString() },
     HtmlService: {
       XFrameOptionsMode: { ALLOWALL: 'ALLOWALL', DEFAULT: 'DEFAULT' },
@@ -87,7 +88,7 @@ function makeServer() {
   const relGs = path.join(REPO, 'apps-script/Release.gs');
   if (fs.existsSync(relGs)) vm.runInContext(fs.readFileSync(relGs, 'utf8'), ctx, { filename: 'Release.gs' });
   return {
-    ctx, sheets, props, errorsLogged,
+    ctx, sheets, props, errorsLogged, cache,
     setEmail(e) { email = e; },
     // pin a frozen release folder the way a teacher would in Script Properties
     useRelease(id, opts) {

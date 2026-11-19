@@ -288,6 +288,38 @@ async function playYear(g, strategy, log) {
   const mrow = Array.from(g.doc.querySelectorAll('.lr-dash tr')).find(tr => tr.textContent.includes(em));
   ok(mrow && /Year 6/.test(mrow.textContent), 'dashboard: a student mid-game shows their game year (Year 6)');
 
+  // ── 11. wait screen, row cache, mismatched server files ─────────────────
+  console.log('\n[11] wait screen and server checks');
+  server.setEmail('waiter@excelcenteraz.org');
+  g = await openGame(server);
+  await playPractice(g, 'hold');
+  await g.click(/^On to Year 6/);
+  g.btn(/^Begin Quarter 1/).click();
+  const busyNow = g.doc.getElementById('lr-busy');
+  ok(busyNow && busyNow.className === 'on' && /Opening Quarter 1/.test(busyNow.textContent) && g.doc.body.classList.contains('lr-busy-on'),
+     'pressing an Advance button shows the wait screen right away ("Opening Quarter 1…")');
+  await g.settle(20);
+  ok(g.doc.getElementById('lr-busy').className === '' && /Quarter 1/.test(text(g)), 'the wait screen goes away when the server answers');
+  ok(server.cache['row|waiter@excelcenteraz.org'] > 1, 'the server remembers the student\'s row (no rescan per click)');
+  // the teacher sorts the sheet: cached rows now point at someone else -> must rescan, never write into another student's row
+  const srows = server.sheets.Saves.rows, hdr = srows.shift(); srows.reverse(); srows.unshift(hdr);
+  const otherBefore = JSON.stringify(srows.find(r => r[0] === 'v3.student@excelcenteraz.org'));
+  while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor')) await g.click(/^Anxious$/);
+  await g.click(/^Advance to Q2/);
+  ok(g.G().phase === 'q1' && srows.find(r => r[0] === 'waiter@excelcenteraz.org')[3] === 'q1' &&
+     JSON.stringify(srows.find(r => r[0] === 'v3.student@excelcenteraz.org')) === otherBefore, 'after the sheet is re-sorted, saves still land in the right row');
+  // mismatched server files: the game says so instead of half-working
+  const realPF = C.publicForecast_;
+  C.publicForecast_ = undefined;
+  g = await openGame(server);
+  ok(/server files don't match/.test(text(g)) && /Code\.gs/.test(text(g)) && !g.doc.querySelector('.lr-instr'), 'Market.gs from another version: a teacher message, no half-working game');
+  C.publicForecast_ = realPF;
+  const realBoot = C.bootPayload_;
+  C.bootPayload_ = function () { const b = realBoot.apply(null, arguments); delete b.api; return b; };
+  g = await openGame(server);
+  ok(/server files don't match/.test(text(g)), 'Code.gs from an older version (no version number): the same teacher message');
+  C.bootPayload_ = realBoot;
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(2); });

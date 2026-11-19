@@ -1,4 +1,4 @@
-/* The Long Run — Data.html
+/* The Long Run — data.js (v3: 25 game years)
  * Client-side DISPLAY + ECONOMIC constants. The price arc, news, rumors, index and
  * seeding live server-side (Market.gs) and arrive via reveals. The tax/fed/dividend
  * model is public methodology, so it lives here and drives the engine in Game.html.
@@ -27,9 +27,12 @@ var INDEX_DIVISOR = 100.4;
 var FUND_WEIGHTS  = { NVT: 0.35, PPK: 0.35, MED: 0.30 };
 
 // The imaginary Fed: HYS annual rate by year (shown to students each quarter).
-var FED_RATES = [3, 3, 2.5, 2, 4.5, 2.5, 1, 0.25, 0.5, 1, 2, 3, 3.5, 3.5, 3];
+var FED_RATES = [2.5, 2.5, 2.75, 3, 3,  3, 3, 2.5, 2, 4.5, 2.5, 1, 0.25, 0.5, 1, 2, 3, 3.5, 3.5, 3];
 
-// Dividends: TBK + SHP only. Quarterly $/share, +4%/yr, cut during the collapse.
+// Game years: 1-5 practice (in the browser), 6-25 the live market (server years 0-19).
+var PRACTICE_YEARS = 5, QUIET_YEARS = 5, SERVER_YEARS = 20, TOTAL_YEARS = 25, LAST_SERVER_YEAR = 19;
+
+// Dividends: TBK + SHP only. Quarterly $/share, +4%/yr, with cuts in some years.
 var DIV_BASE   = { TBK: 0.60, SHP: 0.40 };
 var DIV_GROWTH = 0.04;
 var DIV_PAYERS = ['TBK', 'SHP'];
