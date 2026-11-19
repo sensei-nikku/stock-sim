@@ -369,6 +369,37 @@ async function playYear(g, strategy, log) {
   g = await openGame(server, { seedStorage: {} });
   ok(g.G().year === 0 && g.G().phase === 'choose' && !g.G().tutorialDone, 'after a reset the student starts over (the cached game is gone too)');
 
+  // ── 13. auto-save: the 5-minute trigger, and the 10-minute catch-up on a click ──
+  console.log('\n[13] auto-save');
+  server.setEmail('student.sneaky@excelcenteraz.org');
+  ok(/Only a teacher/.test(C.installAutoSave()) && C.flushSaves().ok === false, 'a student can\'t turn on auto-save or call the flush from the console');
+  server.setEmail(C.TEACHERS[0]);
+  ok(/is on: every 5 minutes/.test(C.installAutoSave()) && server.triggers.length === 1 && server.triggers[0].fn === 'flushSaves' && server.triggers[0].n === 5, 'installAutoSave adds one 5-minute trigger for flushSaves');
+  ok(/already on/.test(C.installAutoSave()) && server.triggers.length === 1, 'running it again doesn\'t add a second trigger');
+  server.setEmail('auto@excelcenteraz.org');
+  g = await openGame(server);
+  await playPractice(g, 'hold');
+  await g.click(/^On to Year 6/);
+  await g.click(/^Begin Quarter 1/);
+  for (let q = 0; q < 2; q++) { while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor')) await g.click(/^Anxious$/); await g.click(/^Advance to Q/); }
+  const arow = () => server.sheets.Saves.rows.find(r => r[0] === 'auto@excelcenteraz.org');
+  ok(arow()[3] === 'choose', 'mid-year (Q3), the sheet still shows the start of the year');
+  let fr = C.flushSaves({ triggerUid: 'test-trigger' });
+  ok(fr.ok && fr.wrote >= 1 && arow()[3] === 'q2', 'the 5-minute auto-save writes the mid-year game to the sheet (Q3)');
+  fr = C.flushSaves({ triggerUid: 'test-trigger' });
+  ok(fr.ok && fr.wrote === 0, 'the next run writes nothing when nothing changed');
+  for (const k in server.cache) delete server.cache[k];
+  g = await openGame(server);
+  ok(g.G().phase === 'q2' && g.errors.length === 0, 'cache lost after an auto-save: the student resumes at Q3, not the start of the year');
+  // the catch-up: changes waiting > 10 minutes get written on the next click (trigger off)
+  while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor')) await g.click(/^Anxious$/);
+  await g.click(/^Advance to Q4/);                                 // a change, not yet written
+  ok(arow()[3] === 'q2', 'a quick click goes to the cache only');
+  const fk = 'lr3f|auto@excelcenteraz.org', f = JSON.parse(server.cache[fk]); f.at -= 11 * 60 * 1000; server.cache[fk] = JSON.stringify(f);   // 11 minutes pass
+  while (g.doc.querySelector('.lr-modal-backdrop .lr-rumor')) await g.click(/^Anxious$/);
+  await g.click(/^Close out the year/);
+  ok(arow()[3] === 'verify', 'after 11 minutes of unwritten changes, the next click writes the sheet');
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(2); });

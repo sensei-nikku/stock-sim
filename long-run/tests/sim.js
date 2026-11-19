@@ -53,7 +53,7 @@ function makeServer() {
     insertSheet(n) { sheets[n] = makeSheet(n); return sheets[n]; },
     getSpreadsheetTimeZone() { return 'America/Phoenix'; }
   };
-  const props = {}, errorsLogged = [], cache = {};
+  const props = {}, errorsLogged = [], cache = {}, triggers = [];
   const ctx = {
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = v; } }) },
     JSON, Math, Date, String, Number, Object, Array,
@@ -61,7 +61,11 @@ function makeServer() {
     Session: { getActiveUser: () => ({ getEmail: () => email }), getScriptTimeZone: () => 'America/Phoenix' },
     LockService: { getUserLock: () => ({ waitLock() {}, releaseLock() {} }), getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = String(v); }, remove: (k) => { delete cache[k]; },
-                                              getAll: (ks) => { const o = {}; ks.forEach((k) => { if (k in cache) o[k] = cache[k]; }); return o; } }) },
+                                              getAll: (ks) => { const o = {}; ks.forEach((k) => { if (k in cache) o[k] = cache[k]; }); return o; },
+                                              putAll: (o) => { for (const k in o) cache[k] = String(o[k]); },
+                                              removeAll: (ks) => { ks.forEach((k) => { delete cache[k]; }); } }) },
+    ScriptApp: { getProjectTriggers: () => triggers.map((t) => ({ getHandlerFunction: () => t.fn })),
+                 newTrigger: (fn) => ({ timeBased: () => ({ everyMinutes: (n) => ({ create: () => { triggers.push({ fn, n }); } }) }) }) },
     Utilities: { formatDate: (d) => new Date(d).toISOString() },
     HtmlService: {
       XFrameOptionsMode: { ALLOWALL: 'ALLOWALL', DEFAULT: 'DEFAULT' },
@@ -89,7 +93,7 @@ function makeServer() {
   const relGs = path.join(REPO, 'apps-script/Release.gs');
   if (fs.existsSync(relGs)) vm.runInContext(fs.readFileSync(relGs, 'utf8'), ctx, { filename: 'Release.gs' });
   return {
-    ctx, sheets, props, errorsLogged, cache,
+    ctx, sheets, props, errorsLogged, cache, triggers,
     setEmail(e) { email = e; },
     // pin a frozen release folder the way a teacher would in Script Properties
     useRelease(id, opts) {

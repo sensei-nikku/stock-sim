@@ -25,7 +25,7 @@ The Long Run runs as a Google Apps Script web app. The Apps Script project holds
 ## Releases
 | Id | What |
 |---|---|
-| `2026-11-19-v3.4` | 💾 Save is a real save. **Needs the Code.gs that came with it**: each game lives in the script cache while it's played (~60 ms vs ~800 ms for the sheet) and the sheet is written at each year end, on Save, at the practice checkpoint and on resets. A lost cache falls back to the last of those. |
+| `2026-11-19-v3.4` | 💾 Save is a real save. **Needs the Code.gs that came with it**: each game lives in the script cache while it's played (~60 ms vs ~800 ms for the sheet). The sheet is written every 5 minutes by `flushSaves` (a timed trigger: run `installAutoSave` once in the editor), at each year end, on Save, at the practice checkpoint, on resets, and on any click when changes have waited over 10 minutes. |
 | `2026-11-19-v3.3` | Wait screen on every trip to the server; refuses to run (teacher message) unless Code.gs reports `api: 3`. **Needs the Code.gs that came with it** (no shared lock on advance, row cache, timing in the execution log). |
 | `2026-11-19-v3.2` | Same as v3.1 with no era names on screen (no "quiet market", no "long run begins" card, one progress-bar gap after practice). Pair with Market.gs whose Year 10 title is "More of the Same". |
 | `2026-11-19-v3.1` | Same as v3, plus the teacher dashboard shows Practice / Year N / Finished. |
