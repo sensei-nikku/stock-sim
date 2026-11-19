@@ -15,7 +15,7 @@
  * A missing or damaged pin makes the game show "not released" instead of loading
  * anything unchecked (fails closed).
  */
-var LIVE_RELEASE = {"id":"2026-11-19-v3.1","sha":"7ac04c87f92c416393afc86576a46410900afa87","files":{"styles.css":"sha384-+D3Urly0EgfPvEazVEl8iqCLzkVHDBadfAX8tbL5F2A0oImed7sBNn/GGuNdxpC4","data.js":"sha384-DrJqn6piK1c4c8uSLdfcLZCZmZL7GPJF9UbBg6vDhBc00mjo4evZFdLF4zDtSJci","persistence.js":"sha384-QCANZRAkLV/slgfo53UwbBoAxBHMO9ZWp7HcaFhr8XHM0NGPvVTpwIVZIbaJ8kWy","game.js":"sha384-o8S2jQ16sB/HSW+zTRPvDiRN9yqJaml5If02g+FAPFOcxwjSglCu+hv0SlnNk+y+"}};
+var LIVE_RELEASE = {"id":"2026-11-19-v3.2","sha":"5e1eb1b0f5f60e1b87757b19d72162bd820d9a38","files":{"styles.css":"sha384-+D3Urly0EgfPvEazVEl8iqCLzkVHDBadfAX8tbL5F2A0oImed7sBNn/GGuNdxpC4","data.js":"sha384-p5e4wQiYPaf2Ps4InimOHFDH/qaGa73AJ5yiEcHpTZIhI9zLgupN0kCxHySbeKcd","persistence.js":"sha384-QCANZRAkLV/slgfo53UwbBoAxBHMO9ZWp7HcaFhr8XHM0NGPvVTpwIVZIbaJ8kWy","game.js":"sha384-XXvBcjRjRXj4BC5AiUwftOZ0OgpEfy2pZMci4S6zyuaaQ5bi5jgwR3YYJbFMJ8kx"}};
 
 var RELEASE_FILES = ['styles.css', 'data.js', 'persistence.js', 'game.js'];
 
