@@ -819,6 +819,14 @@ async function loadDashboard() {
   } catch (e) { el.innerHTML = '<p class="lr-error">' + esc(String(e)) + '</p>'; }
 }
 var DASH = {};
+function dashWhere(s, st) {               // where a student is, in game years
+  if (s.phase === 'done') return 'Finished';
+  if (Number(s.year) === 0 && s.phase === 'choose' && !st.tutorialDone) {
+    var step = st.tp && TUT_STEPS[st.tp.i];
+    return 'Practice' + (step && step.y !== undefined ? ' ' + (step.y + 1) : '');
+  }
+  return 'Year ' + (Number(s.year) + 1 + PRACTICE_YEARS);
+}
 function dashboardTable(students) {
   if (!students || !students.length) return '<p class="lr-muted">No students have started yet.</p>';
   DASH = {};
@@ -831,7 +839,7 @@ function dashboardTable(students) {
       if (st.valueHistory && st.valueHistory.length) v = money(st.valueHistory[st.valueHistory.length - 1]);
       if (st.emotions && st.emotions.length) feels = st.emotions.map(function (e) { return e ? e.slice(0, 3) : '·'; }).join(' ');
     } catch (e) {}
-    return '<tr><td>' + esc(s.email) + '</td><td>Year ' + (Number(s.year) + 1 + PRACTICE_YEARS) + '</td><td>' + esc(s.phase) +
+    return '<tr><td>' + esc(s.email) + '</td><td>' + dashWhere(s, DASH[s.email] || {}) + '</td><td>' + esc(s.phase) +
       '</td><td>' + v + '</td><td class="lr-feeltrail">' + esc(feels) + '</td>' +
       '<td>' + (nRef ? '<button onclick="showReflections(\'' + jsArg(s.email) + '\')">Read ' + nRef + '</button>' : '<span class="lr-dim">—</span>') +
       ' <button onclick="openReportFor(\'' + jsArg(s.email) + '\',' + (Number(s.year) || 0) + ',\'' + jsArg(s.phase) + '\')">Report</button></td>' +

@@ -26,6 +26,7 @@ The Long Run runs as a Google Apps Script web app. The Apps Script project holds
 ## Releases
 | Id | What |
 |---|---|
+| `2026-11-19-v3.1` | Same as v3, plus the teacher dashboard shows Practice / Year N / Finished. |
 | `2026-11-19-v3` | 25 years: 5-year practice (balances carry over) → 5 quiet years → 15-year long run. Start-of-year forecasts, random rumors (Street Tattler), mood + reflection stops, printable report. Needs Code.gs/Market.gs v3. |
 | `2026-11-19-v2` | 5-year practice round + 15 years. Needs Code.gs/Market.gs v2. |
 | `2026-11-19-classic` | The original 15-year game, fonts embedded. Needs Code.gs/Market.gs v2. |

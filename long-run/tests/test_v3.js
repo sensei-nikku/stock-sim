@@ -186,7 +186,10 @@ async function playYear(g, strategy, log) {
   g = await openGame(server);
   await g.settle(30);
   const trow = Array.from(g.doc.querySelectorAll('.lr-dash tr')).find(tr => /v3\.student/.test(tr.textContent));
-  ok(trow && /Year 25/.test(trow.textContent), 'dashboard shows game years (Year 25 for a finished student)');
+  ok(trow && /Finished/.test(trow.textContent), 'dashboard shows a finished student as Finished');
+  const rows = Array.from(g.doc.querySelectorAll('.lr-dash tr'));
+  const rowOf = (re) => rows.find(tr => re.test(tr.textContent));
+  ok(rowOf(/old\.save@/) && /Practice/.test(rowOf(/old\.save@/).textContent), 'dashboard: a student in the practice round shows Practice');
   Array.from(trow.querySelectorAll('button')).find(b => b.textContent === 'Report').click(); await g.settle(5);
   ok(/my report/.test(text(g)) && /v3\.student@excelcenteraz\.org/.test(text(g)) && /Practice year 1 taught me/.test(text(g)), 'teacher can open and print any student\'s report');
 
@@ -268,6 +271,11 @@ async function playYear(g, strategy, log) {
   const prev = g.btn(/Preview as student/); if (prev) { prev.click(); await g.settle(); }
   await g.click(/^Skip practice/);
   ok(/You're ready/.test(text(g)) || /Start of Year 6/.test(text(g)), 'Skip practice jumps to the end of the practice round');
+
+  server.setEmail(C.TEACHERS[0]); C.resetMe();
+  g = await openGame(server); await g.settle(30);
+  const mrow = Array.from(g.doc.querySelectorAll('.lr-dash tr')).find(tr => tr.textContent.includes(em));
+  ok(mrow && /Year 6/.test(mrow.textContent), 'dashboard: a student mid-game shows their game year (Year 6)');
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
