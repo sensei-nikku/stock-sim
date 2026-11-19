@@ -53,9 +53,8 @@ function makeServer() {
     insertSheet(n) { sheets[n] = makeSheet(n); return sheets[n]; },
     getSpreadsheetTimeZone() { return 'America/Phoenix'; }
   };
-  const props = {};
+  const props = {}, errorsLogged = [];
   const ctx = {
-    console,
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = v; } }) },
     JSON, Math, Date, String, Number, Object, Array,
     SpreadsheetApp: { getActiveSpreadsheet: () => ss, openById: () => ss },
@@ -63,7 +62,7 @@ function makeServer() {
     LockService: { getUserLock: () => ({ waitLock() {}, releaseLock() {} }), getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     Utilities: { formatDate: (d) => new Date(d).toISOString() },
     HtmlService: {
-      XFrameOptionsMode: { ALLOWALL: 'ALLOWALL' },
+      XFrameOptionsMode: { ALLOWALL: 'ALLOWALL', DEFAULT: 'DEFAULT' },
       createTemplateFromFile(name) {
         const t = {
           evaluate() {
@@ -71,15 +70,16 @@ function makeServer() {
             html = html.replace(/<\?!=\s*BOOT\s*\?>/g, t.BOOT);
             html = html.replace(/<\?!=\s*longRunRelease\(\)\s*\?>/g, () => ctx.longRunRelease());
             html = html.replace(/<\?!=\s*include\('(\w+)'\);?\s*\?>/g, (m, f) => fs.readFileSync(path.join(SRC, f + '.html'), 'utf8'));
-            const out = { getContent: () => html, setTitle() { return out; }, addMetaTag() { return out; }, setXFrameOptionsMode() { return out; } };
+            const out = { getContent: () => html, setTitle() { return out; }, addMetaTag() { return out; }, setXFrameOptionsMode(m) { out.xframe = m; return out; } };
             return out;
           }
         };
-        t.__file = name;   // caller sets the real path via server.indexFile
+        t.__file = name === 'Index' ? path.join(REPO, 'apps-script/Index.html') : name;   // renderIndex() may point elsewhere
         return t;
       },
       createHtmlOutputFromFile(f) { return { getContent: () => fs.readFileSync(path.join(SRC, f + '.html'), 'utf8') }; }
-    }
+    },
+    console: { log() {}, error(...a) { errorsLogged.push(a.join(' ')); } },
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(SRC, 'Market.gs'), 'utf8'), ctx, { filename: 'Market.gs' });
@@ -87,16 +87,16 @@ function makeServer() {
   const relGs = path.join(REPO, 'apps-script/Release.gs');
   if (fs.existsSync(relGs)) vm.runInContext(fs.readFileSync(relGs, 'utf8'), ctx, { filename: 'Release.gs' });
   return {
-    ctx, sheets, props,
+    ctx, sheets, props, errorsLogged,
     setEmail(e) { email = e; },
     // pin a frozen release folder the way a teacher would in Script Properties
     useRelease(id, opts) {
-      if (id == null) { delete props.LIVE_RELEASE; return; }
+      if (id == null) { ctx.LIVE_RELEASE = undefined; return; }
       const crypto = require('crypto'), files = {};
       for (const f of ['styles.css', 'data.js', 'persistence.js', 'game.js']) {
         files[f] = 'sha384-' + crypto.createHash('sha384').update(fs.readFileSync(path.join(REPO, 'releases', id, f))).digest('base64');
       }
-      props.LIVE_RELEASE = (opts && opts.raw) || JSON.stringify({ id, sha: 'a'.repeat(40), files });
+      ctx.LIVE_RELEASE = (opts && opts.raw) || { id, sha: 'a'.repeat(40), files };
     },
     renderIndex(indexFile) {
       const t = ctx.HtmlService.createTemplateFromFile('Index');
@@ -121,7 +121,8 @@ class LocalLoader extends ResourceLoader {
       this.loaded.push(m[1] + '/' + m[2] + (url.includes('jsdelivr') ? ' (jsdelivr)' : ''));
       return Promise.resolve(fs.readFileSync(f));
     }
-    return Promise.resolve(Buffer.from(''));   // fonts etc.
+    (this.others = this.others || []).push(url);
+    return Promise.resolve(Buffer.from(''));   // anything else (should be nothing)
   }
 }
 

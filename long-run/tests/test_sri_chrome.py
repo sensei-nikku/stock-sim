@@ -4,7 +4,7 @@ answered from the local release folder (with Access-Control-Allow-Origin: *, lik
 import os, re, subprocess, sys
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
-REL = sys.argv[1] if len(sys.argv) > 1 else '2026-11-18-v2'
+REL = sys.argv[1] if len(sys.argv) > 1 else '2026-11-19-v2'
 html = subprocess.check_output(['node', os.path.join(HERE, 'gen_page.js'), REL], env=dict(os.environ, NODE_PATH='/home/claude/harness/node_modules'), text=True)
 STUB = "window.google={script:{run:new Proxy({},{get:()=>()=>({})}),url:{getLocation:function(cb){setTimeout(function(){cb({parameter:{}})},1)}}}};"
 PAT = re.compile(r'^https://(sensei-nikku\.github\.io/stock-sim|cdn\.jsdelivr\.net/gh/sensei-nikku/stock-sim@[\w.-]+)/long-run/(releases/[\w.-]+|beta)/([\w.]+)')
@@ -29,7 +29,8 @@ def run(tamper):   # tamper: set of (host, file) to corrupt
                 hits.append(host + ':' + m.group(3))
                 ctype = 'text/css' if m.group(3).endswith('.css') else 'application/javascript'
                 return route.fulfill(status=200, body=body, headers={'content-type': ctype, 'access-control-allow-origin': '*'})
-            return route.fulfill(status=200, body='', headers={'content-type': 'text/css', 'access-control-allow-origin': '*'})
+            hits.append('OTHER:' + u)
+            return route.fulfill(status=404, body='')
         pg.route('**/*', handle)
         pg.goto('https://n-test.script.googleusercontent.com/userCodeAppPanel')
         pg.wait_for_function("document.querySelector('#app .lr-card') || document.querySelector('.lr-bootfail')", timeout=15000)
@@ -37,7 +38,7 @@ def run(tamper):   # tamper: set of (host, file) to corrupt
     return text, hits, msgs
 
 t, h, m = run(set())
-ok('practice round' in t.lower() and all(x.startswith('pages:') for x in h), 'untouched files: game loads from GitHub Pages only (' + ', '.join(h) + ')')
+ok('practice round' in t.lower() and all(x.startswith('pages:') for x in h), 'untouched files: game loads from GitHub Pages only, nothing else requested (' + ', '.join(h) + ')')
 t, h, m = run({('pages', 'game.js')})
 ok('practice round' in t.lower() and 'cdn:game.js' in h and any('integrity' in x.lower() for x in m), 'tampered game.js on Pages: Chrome blocks it (integrity error), shell falls back to jsDelivr, game loads')
 t, h, m = run({('pages', 'styles.css')})

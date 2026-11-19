@@ -79,7 +79,7 @@ async function playReal(g, years, strategy, opts) {
 
 (async () => {
   const server = makeServer();
-  server.useRelease('2026-11-18-v2');
+  server.useRelease('2026-11-19-v2');
 
   // ── 1. brand-new student: practice round, HOLD at the ShopRight bump ──────────
   console.log('\n[1] new student, practice round (hold)');
@@ -197,10 +197,10 @@ async function playReal(g, years, strategy, opts) {
   // ── 4. a student already mid-game (old save) never sees practice ─────────────
   console.log('\n[4] existing save mid-game');
   server.setEmail('veteran@excelcenteraz.org');
-  server.useRelease('2026-11-18-classic');
+  server.useRelease('2026-11-19-classic');
   g = await openGame(server, {});
   await playReal(g, 2, null);                    // two years on the classic release (old save shape)
-  server.useRelease('2026-11-18-v2');
+  server.useRelease('2026-11-19-v2');
   g = await openGame(server, BETA);
   ok(/Start of Year 3/.test(g.text()) && !/practice round/i.test(g.text()), 'a Year-3 save from the classic release opens straight into Year 3 on v2');
   await playReal(g, 1, null);

@@ -20,25 +20,22 @@
   <script>window.LONGRUN_RELEASE = <?!= longRunRelease() ?>;</script>
 
   <script>
-  /* The Long Run — Apps Script shell (Index.html), v2: pinned releases.
+  /* The Long Run — Apps Script shell (Index.html), v3: pinned releases only.
    *
-   * STUDENTS (and you, normally) get the APPROVED RELEASE only:
+   * Everyone — students and teachers — runs only the release pinned in Release.gs:
    *   - files come from long-run/releases/<id>/ on GitHub Pages, or jsDelivr at the
    *     exact commit as a backup;
-   *   - each file carries its SHA-384 hash from LIVE_RELEASE (Release.gs), and the
-   *     browser refuses to run a file whose bytes don't match (Subresource Integrity).
-   *   A push to GitHub changes nothing here until a teacher pastes a new LIVE_RELEASE.
-   *
-   * TEACHERS ONLY, with ?beta=1 on the link: the unpinned test build in long-run/beta/.
-   *   Students who add ?beta=1 still get the approved release.
-   *
-   * Code.gs (login, saves) and Market.gs (future prices) stay here, unchanged.
+   *   - each file carries its SHA-384 hash, and the browser refuses to run a file whose
+   *     bytes don't match (Subresource Integrity). Fonts are inside styles.css, so its
+   *     hash covers them; nothing else is fetched.
+   * A push to GitHub changes nothing. A new pin reaches /dev when Release.gs is pasted,
+   * and students only when a new deployment version is made. There is no unpinned path.
    */
   (function () {
     var PAGES = 'https://sensei-nikku.github.io/stock-sim/long-run/';
     var CDN   = 'https://cdn.jsdelivr.net/gh/sensei-nikku/stock-sim@';
     var SCRIPTS = ['data.js', 'persistence.js', 'game.js'];   // order matters
-    var REL = window.LONGRUN_RELEASE, BOOT = window.LONGRUN_BOOT || {};
+    var REL = window.LONGRUN_RELEASE;
 
     function fail(msg) {
       document.getElementById('app').innerHTML =
@@ -72,7 +69,7 @@
 
     function startRelease() {
       if (!REL || !REL.files) {
-        fail('This game hasn\'t been released yet. (Teacher: set LIVE_RELEASE in Project Settings &rarr; Script Properties.)');
+        fail('This game hasn\'t been released yet. (Teacher: Release.gs is missing or its pin is damaged.)');
         return;
       }
       var hash = function (f) { return REL.files[f]; };
@@ -85,24 +82,8 @@
       })();
     }
 
-    function startBeta() {
-      var stamp = '?v=' + Math.floor(Date.now() / 60000);
-      loadFrom(function (f) { return PAGES + 'beta/' + f + stamp; }, function () { return null; }, function () {
-        document.body.insertAdjacentHTML('beforeend',
-          '<div style="position:fixed;left:10px;bottom:10px;z-index:99;background:#f59e0b;color:#111;' +
-          'font:700 11px/1 sans-serif;letter-spacing:.08em;padding:5px 9px;border-radius:4px">BETA</div>');
-      }, function () { fail(DOWN); });
-    }
 
-    var picked = false;
-    function pick(wantBeta) {
-      if (picked) return; picked = true;
-      if (wantBeta && BOOT.isTeacher) startBeta(); else startRelease();
-    }
-    try {
-      google.script.url.getLocation(function (loc) { pick(!!((loc && loc.parameter) || {}).beta); });
-      setTimeout(function () { pick(false); }, 1500);
-    } catch (e) { pick(false); }
+    startRelease();
   })();
   </script>
 </body>
