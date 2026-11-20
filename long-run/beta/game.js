@@ -14,6 +14,12 @@
  * forecasts, mid-year rumors with a required mood check, year-end news-vs-reality and
  * rumor results, a printable summary report.
  *
+ * v3.6 beta (Nov 20 2026): less on each screen. Start of Year = news, then moves (Year 6 adds
+ * three short intro cards first); quarters = one compact row per investment, buy/sell amounts
+ * open on tap; Year in Review = three steps (your money / what happened / your turn) with the
+ * charts, price grid, stories and tax detail behind "Show more". The forecast explainer only
+ * shows in Years 6-7. Every step's markup stays in the DOM (hidden), so the tests can reach it.
+ *
  * SOURCE OF TRUTH: this file in sensei-nikku/stock-sim (long-run/<channel>/game.js),
  * loaded by the Apps Script Index.html shell. Nov 2026 changes: practice round
  * (before Year 1), typed reflections, header/net-worth agreement, hindsight
@@ -342,31 +348,65 @@ function signInNotice() {
     (Server.available ? 'You appear to be signed out.' : 'This needs to run from the deployed web-app link.') + '</p></div>';
 }
 
+// ─── Screen steps (v3.6): one chunk at a time. Client-only; nothing here is saved. ──
+var YO = { y: -1, s: 0, g: 0 };      // year-open: s 0 = news, 1 = your moves; g = intro card (Year 6 only)
+var VR = { y: -1, s: 0 };            // year in review: 0 = your money, 1 = what happened, 2 = your turn
+var OPEN_ROW = null;                 // quarter screen: which investment's buy/sell buttons are open
+function yo() { if (YO.y !== G.year) { YO = { y: G.year, s: 0, g: 0 }; } return YO; }
+function vr() { if (VR.y !== G.year) { VR = { y: G.year, s: 0 }; } return VR; }
+function stepTo(which, n) { if (which === 'yo') yo().s = n; else if (which === 'g') yo().g = n; else vr().s = n; window.scrollTo && window.scrollTo(0, 0); render(); }
+function stepCls(on) { return on ? 'lr-step' : 'lr-step lr-step-hide'; }
+function stepNext(label, which, n) { return '<button class="lr-stepnext" onclick="stepTo(\'' + which + '\',' + n + ')">' + label + ' &rarr;</button>'; }
+function stepBack(label, which, n) { return '<button class="lr-stepback" onclick="stepTo(\'' + which + '\',' + n + ')">&larr; ' + label + '</button>'; }
+function stepDots(n, i) { var d = ''; for (var k = 0; k < n; k++) d += '<span class="lr-dot' + (k === i ? ' lr-dot-on' : '') + '"></span>'; return '<div class="lr-dots">' + d + '</div>'; }
+
+// Year 6 only: the three things to know before the live market (pretraining), one card at a time.
+var INTRO_CARDS = [
+  { h: 'Your money', b: '<p>Every quarter a <b>$1,000 paycheck</b> lands in <b>savings (HYS)</b>. Savings is safe and earns a little interest. The rate changes each year.</p>' },
+  { h: 'What you can buy', b: '<p><b>Index 5</b>: a slice of all five companies. Pays dividends.<br><b>GrowthFund</b>: a blend of three companies. No dividends.<br><b>A single company</b>: riskier. Buy with the <b>+</b> buttons; sell any time.</p>' },
+  { h: 'News, rumors, and your notes', b: '<p>Each year starts with <b>forecasts</b>. They usually get the direction right and the size wrong. <b>Rumors</b> pop up at random; most are false.</p><p>Each year ends with how it felt and a sentence or two from you. Press <b>&#128196; Report</b> any time to see everything so far.</p>' }
+];
+function introCards() {
+  var i = yo().g, h = '';
+  INTRO_CARDS.forEach(function (c, k) {
+    h += '<div class="' + stepCls(k === i) + ' lr-intro"><div class="lr-year">Before Year 6 &middot; ' + (k + 1) + ' of 3</div><h2>' + c.h + '</h2>' + c.b +
+      '<div class="lr-stepnav">' + (k > 0 ? stepBack('Back', 'g', k - 1) : '<span></span>') +
+      (k < 2 ? stepNext('Next', 'g', k + 1) : stepNext('See this year\'s forecasts', 'g', 3)) + '</div></div>';
+  });
+  return h;
+}
+
 // ─── Year-open ─────────────────────────────────────────────────────────────────
 function renderYearOpen() {
   var y = gameYear(), fed = FED_RATES[G.year];
   var fedNote = fed <= 1 ? ' — cash earns almost nothing.' : fed >= 4 ? ' — savers are being paid well.' : '.';
   var first = (G.year === 0);
-  var intro = first
-    ? 'Your practice portfolio came with you: the shares and savings below are yours. From here the market is live, and your paycheck is <strong>' + money(PAYCHECK_Q) + '</strong> a quarter. Read this year\'s forecasts, then get your bearings.'
-    : 'These are <strong>last year\'s closing prices</strong>. Sell holdings or put savings to work now, before this year\'s first quarter — or just move on and decide quarter by quarter.';
   var p = soyPrices(), idx = soyIndex();
   var rows = INSTRUMENTS.map(function (inst) { return soyRow(inst, p, idx); }).join('');
+  var st = yo(), intro6 = first && st.g < 3, news = !intro6 && st.s === 0, moves = !intro6 && st.s === 1;
   return '<div class="lr-card">' +
-    '<div class="lr-year">Start of Year ' + y + '</div>' +
-    '<h2>' + (first ? 'Welcome to the live market' : 'Before the market opens') + '</h2>' +
-    '<p class="lr-muted">' + intro + '</p>' +
-    (first ? realGameGuide() : '') +
-    forecastBlock(G.reveal.news, true) +
-    '<div class="lr-fed">High-yield savings pays <strong>' + fed.toFixed(2) + '%</strong> this year' + fedNote + '</div>' +
-    '<div class="lr-standing">' +
-      '<div><span class="lr-dim">Savings (HYS)</span><strong>' + money(G.hys) + '</strong></div>' +
-      '<div><span class="lr-dim">Net worth</span><strong>' + money(valueOf(G, p, idx)) + '</strong></div>' +
+    (first ? introCards() : '') +
+    '<div class="' + stepCls(news) + '">' +
+      '<div class="lr-year">Start of Year ' + y + ' &middot; step 1 of 2: the news</div>' +
+      '<h2>' + (first ? 'Welcome to the live market' : 'Before the market opens') + '</h2>' +
+      (first ? '<p class="lr-muted">Your practice portfolio came with you. From here the market is live, and your paycheck is <strong>' + money(PAYCHECK_Q) + '</strong> a quarter.</p>' : '') +
+      forecastBlock(G.reveal.news, true) +
+      '<div class="lr-fed">High-yield savings pays <strong>' + fed.toFixed(2) + '%</strong> this year' + fedNote + '</div>' +
+      '<div class="lr-stepnav">' + (first ? stepBack('Back', 'g', 2) : '<span></span>') + stepNext('Next: make your moves', 'yo', 1) + '</div>' +
     '</div>' +
-    '<div class="lr-soywrap"><table class="lr-trade lr-soy">' +
-      '<thead><tr><th>Instrument</th><th>' + (first ? 'Starting price' : 'Last close') + '</th><th>Buy from savings</th><th>Holding</th><th>Sell</th></tr></thead>' +
-      '<tbody>' + rows + '</tbody></table></div>' +
-    '<button class="lr-advance" onclick="step(\'TRADE\')">Begin Quarter 1 →</button>' +
+    '<div class="' + stepCls(moves) + '">' +
+      '<div class="lr-year">Start of Year ' + y + ' &middot; step 2 of 2: your moves</div>' +
+      '<p class="lr-muted">' + (first ? 'Buy or sell now, or just begin. You can also decide quarter by quarter.' : 'These are <strong>last year\'s closing prices</strong>. Buy or sell now, or just begin.') + '</p>' +
+      '<div class="lr-standing">' +
+        '<div><span class="lr-dim">Savings (HYS)</span><strong>' + money(G.hys) + '</strong></div>' +
+        '<div><span class="lr-dim">Net worth</span><strong>' + money(valueOf(G, p, idx)) + '</strong></div>' +
+      '</div>' +
+      '<div class="lr-soywrap"><table class="lr-trade lr-soy">' +
+        '<thead><tr><th>Instrument</th><th>' + (first ? 'Starting price' : 'Last close') + '</th><th>Buy from savings</th><th>Holding</th><th>Sell</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></div>' +
+      '<div class="lr-stepnav">' + stepBack('Back to the forecasts', 'yo', 0) + '<span></span></div>' +
+      '<button class="lr-advance" onclick="step(\'TRADE\')">Begin Quarter 1 →</button>' +
+    '</div>' +
     '</div>';
 }
 function soyPrices() { var o = {}; TICKERS.forEach(function (t) { var a = G.hist[t]; o[t] = (a && a.length) ? a[a.length - 1] : STARTING_PRICES[t]; }); return o; }
@@ -428,12 +468,37 @@ function renderQuarter() {
       '<div><span class="lr-dim">HYS rate</span><strong>' + fed.toFixed(2) + '%</strong></div>' +
       '<div><span class="lr-dim">Net worth</span><strong>' + money(valueOf(G, p, idx)) + '</strong></div>' +
     '</div>' +
-    '<div class="lr-instr-grid">' + cards + '</div>' +
+    '<div class="lr-qlist">' + cards + '</div>' +
     '<p class="lr-muted">Money left in HYS earns ' + (fed / 4).toFixed(2) + '% at quarter-end. Money you deploy doesn\'t.</p>' +
     '<button class="lr-advance" onclick="commitQuarter()">' + (q < 3 ? 'Advance to Q' + (q + 2) + ' →' : 'Close out the year →') + '</button>' +
     '</div>';
 }
+function toggleRow(inst) { OPEN_ROW = (OPEN_ROW === inst) ? null : inst; render(); }
 function instrumentCard(inst, p, idx, y) {
+  var isFund = (inst === 'FUND'), isIndex = (inst === 'INDEX'), isStock = !isFund && !isIndex;
+  var meta = isStock ? STOCKS[inst] : FUNDS[inst];
+  var price = priceOf(G, inst, p, idx), sh = sharesHeld(G, inst), val = sh * price;
+  var ty = thisYearSeries(inst);
+  var prev = prevPriceOf(inst), diff = (prev == null) ? null : price - prev;
+  var pays = (isIndex || inst === 'TBK' || inst === 'SHP');
+  var primary = isStock ? inst : meta.name, secondary = isStock ? meta.name : meta.note;
+  var open = (OPEN_ROW === inst);
+  return '<div class="lr-instr lr-qrow' + (open ? ' lr-qrow-open' : '') + '">' +
+    '<div class="lr-qline">' +
+      '<span class="lr-qname lr-instr-name"><b style="color:' + meta.color + '">' + primary + '</b>' + (pays ? ' <span class="lr-divtag">DIV</span>' : '') + '<br><span class="lr-dim">' + esc(secondary) + '</span></span>' +
+      '<span class="lr-qprice"><span class="lr-price">' + money(price) + '</span> ' + (diff == null ? '<span class="lr-chg lr-flat">·</span>' : chgTag(diff, true)) + '</span>' +
+      '<span class="lr-qspark">' + priceSpark(ty, netColor(ty)) + '</span>' +
+      '<span class="lr-qhold">' + (sh > 0 ? 'You hold ' + money(val) : '<span class="lr-dim">Not held</span>') + '</span>' +
+      '<button class="lr-qtoggle" onclick="toggleRow(\'' + inst + '\')">' + (open ? 'Close' : 'Buy / sell') + '</button>' +
+    '</div>' +
+    '<div class="lr-instr-actions' + (open ? '' : ' lr-step-hide') + '">' +
+      BUY_AMOUNTS.map(function (amt) { return '<button' + (G.hys < amt ? ' disabled' : '') + ' onclick="doBuy(\'' + inst + '\',' + amt + ')">+$' + amt + '</button>'; }).join('') +
+      '<button class="lr-sell"' + (sh > 0 ? '' : ' disabled') + ' onclick="doSell(\'' + inst + '\',0.5)">Sell ½</button>' +
+      '<button class="lr-sell"' + (sh > 0 ? '' : ' disabled') + ' onclick="doSell(\'' + inst + '\',1)">Sell all</button>' +
+      (sh > 0 ? '<span class="lr-dim lr-qsh">' + sh.toFixed(2) + ' shares</span>' : '') +
+    '</div></div>';
+}
+function instrumentCardOld(inst, p, idx, y) {
   var isFund = (inst === 'FUND'), isIndex = (inst === 'INDEX'), isStock = !isFund && !isIndex;
   var meta = isStock ? STOCKS[inst] : FUNDS[inst];
   var price = priceOf(G, inst, p, idx), sh = sharesHeld(G, inst), val = sh * price;
@@ -508,8 +573,10 @@ function renderVerify() {
     (Math.round(aheadBy) === 0
       ? '<span class="lr-muted" style="font-family:var(--mono);font-weight:700">= same as just saving</span></div>'
       : '<span class="' + (aheadBy > 0 ? 'lr-true' : 'lr-false') + '" style="font-family:var(--mono);font-weight:700">' + (aheadBy > 0 ? '\u25B2 ahead by ' : '\u25BC behind by ') + money(Math.abs(aheadBy)) + '</span></div>');
+  var s = vr().s;
   return '<div class="lr-card">' +
-    '<div class="lr-year">Year ' + gameYear() + ' — ' + esc(r.title) + '</div>' +
+    '<div class="' + stepCls(s === 0) + '">' +
+    '<div class="lr-year">Year ' + gameYear() + ' — ' + esc(r.title) + ' &middot; step 1 of 3: your money</div>' +
     '<div class="lr-gl"><table>' +
       row('Started the year with', money(startV)) +
       row('Your paychecks added', '+' + money(contrib)) +
@@ -520,16 +587,25 @@ function renderVerify() {
       '<tr class="lr-gl-end"><td>Ended with</td><td>' + money(endV) + '</td></tr>' +
     '</table></div>' +
     cmp +
-    eoyTickerTable(r) +
-    eoyGallery(r) +
-    taxBillBlock(bill) +
+    '<div class="lr-stepnav"><span></span>' + stepNext('Next: what happened', 'vr', 1) + '</div>' +
+    '</div>' +
+    '<div class="' + stepCls(s === 1) + '">' +
+    '<div class="lr-year">Year ' + gameYear() + ' &middot; step 2 of 3: what happened</div>' +
     forecastCheck(r) +
     rumorResults(r) +
-    storiesBlock(r) +
     hindsightBlock(r) +
+    '<details class="lr-more"><summary>Show more: price charts, the year\'s stories, and your tax bill</summary>' +
+      eoyTickerTable(r) + eoyGallery(r) + storiesBlock(r) + taxBillBlock(bill) +
+    '</details>' +
+    '<div class="lr-stepnav">' + stepBack('Back', 'vr', 0) + stepNext('Next: your turn', 'vr', 2) + '</div>' +
+    '</div>' +
+    '<div class="' + stepCls(s === 2) + '">' +
+    '<div class="lr-year">Year ' + gameYear() + ' &middot; step 3 of 3: your turn</div>' +
     emotionBlock() +
     reflectBlock(r) +
+    '<div class="lr-stepnav">' + stepBack('Back', 'vr', 1) + '<span></span></div>' +
     advanceGate(r) +
+    '</div>' +
     '</div>';
 }
 function advanceGate(r) {
@@ -736,7 +812,7 @@ function forecastBlock(news, open) {
       esc(n.headline) + ' ' + saidTag(n.said) + '</div>';
   }).join('');
   return '<div class="lr-newswire"><h4>' + (open ? 'This year\'s forecasts' : 'The forecasts') + '</h4>' + items +
-    (open ? '<p class="lr-muted" style="font-size:13px;margin:4px 0 0">Forecasts point the right way more often than not. How far they say it\'ll go is often wrong, and when the market gets wild, some point the wrong way.</p>' : '') +
+    (open && G.year <= 1 ? '<p class="lr-muted" style="font-size:13px;margin:4px 0 0">Forecasts point the right way more often than not. How far they say it\'ll go is often wrong, and when the market gets wild, some point the wrong way.</p>' : '') +
     '</div>';
 }
 function showArticle(t) {
